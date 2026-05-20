@@ -1,0 +1,160 @@
+/* ═══ NotifDropdown ═══ */
+
+/* Wrapper posisi relatif untuk dropdown */
+.nd-wrap {
+  position: relative;
+}
+
+/* ── Panel ─────────────────────────────────────────────────── */
+.nd-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 360px;
+  max-height: 480px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.07);
+  border: 1px solid #e8edf5;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 999;
+  animation: ndSlide 0.18s ease;
+}
+
+@keyframes ndSlide {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+.nd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+.nd-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nd-badge {
+  font-size: 11px;
+  font-weight: 700;
+  background: #ef4444;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.nd-read-all {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3b82f6;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 7px;
+  transition: background 0.2s;
+}
+.nd-read-all:hover { background: #eff6ff; }
+
+/* ── List ──────────────────────────────────────────────────── */
+.nd-list {
+  overflow-y: auto;
+  flex: 1;
+  overscroll-behavior: contain;
+}
+.nd-list::-webkit-scrollbar { width: 6px; }
+.nd-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+
+/* ── Empty state ───────────────────────────────────────────── */
+.nd-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: #94a3b8;
+}
+.nd-empty svg {
+  width: 36px;
+  height: 36px;
+  opacity: 0.4;
+}
+.nd-empty p {
+  font-size: 13px;
+  margin: 0;
+}
+.nd-spin {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Item ──────────────────────────────────────────────────── */
+.nd-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 18px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid #f8fafc;
+}
+.nd-item:last-child { border-bottom: none; }
+.nd-item:hover { background: #f8fafc; }
+.nd-item.nd-unread { background: #eff6ff; }
+.nd-item.nd-unread:hover { background: #dbeafe; }
+
+/* Titik biru untuk unread */
+.nd-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+  flex-shrink: 0;
+  margin-top: 6px;
+  transition: background 0.2s;
+}
+.nd-unread .nd-dot { background: #3b82f6; }
+
+.nd-content {
+  flex: 1;
+  min-width: 0;
+}
+.nd-msg {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+  margin: 0 0 4px;
+  line-height: 1.45;
+}
+.nd-unread .nd-msg { font-weight: 600; }
+.nd-sub {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #3b82f6;
+  background: #eff6ff;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+.nd-time {
+  font-size: 11px;
+  color: #94a3b8;
+}

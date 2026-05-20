@@ -1,0 +1,66 @@
+/* ═══ AdminNavbar ═══ */
+.an-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    height: 68px;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    flex-shrink: 0;
+}
+
+/* ── Left ── */
+.an-title { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2; }
+.an-sub   { font-size: 12px; color: #64748b; margin: 3px 0 0; }
+
+/* ── Right ── */
+.an-right { display: flex; align-items: center; gap: 8px; }
+
+/* Icon buttons */
+.an-btn {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    border: 1.5px solid #e2e8f0;
+    background: #f8fafc;
+    color: #64748b;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+.an-btn svg { width: 16px; height: 16px; }
+.an-btn:hover { background: #eff6ff; border-color: #bfdbfe; color: #3b82f6; }
+
+/* Avatar */
+.an-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4f8cff, #38bdf8);
+    color: #fff; font-size: 14px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; cursor: default;
+}
+
+/* ── Bell (NotifDropdown) — ukuran konsisten dengan an-btn ── */
+.an-right .nav-bell {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    border: 1.5px solid #e2e8f0;
+    background: #f8fafc;
+    color: #64748b;
+}
+.an-right .nav-bell svg { width: 16px; height: 16px; }
+.an-right .nav-bell:hover { background: #eff6ff; border-color: #bfdbfe; color: #3b82f6; }
+
+/* ── Dark mode ── */
+:root.dark .an-header            { background: #1a1d27; border-bottom-color: #2a2d3a; }
+:root.dark .an-title             { color: #e2e8f0; }
+:root.dark .an-sub               { color: #64748b; }
+:root.dark .an-btn               { background: #1e2130; border-color: #3b3f52; color: #94a3b8; }
+:root.dark .an-btn:hover         { background: #252838; border-color: #3b82f6; color: #60a5fa; }
+:root.dark .an-right .nav-bell   { background: #1e2130; border-color: #3b3f52; color: #94a3b8; }
+:root.dark .an-right .nav-bell:hover { background: #252838; border-color: #3b82f6; color: #60a5fa; }

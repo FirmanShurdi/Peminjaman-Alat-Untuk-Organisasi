@@ -1,0 +1,117 @@
+.daftar-barang-page {
+    min-height: 100vh;
+    background-color: #f8fafc;
+    padding-top: 80px; /* space for navbar */
+    padding-bottom: 60px;
+}
+
+.db-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.db-header {
+    margin-bottom: 40px;
+    text-align: center;
+}
+
+.db-badge {
+    display: inline-block;
+    background: #e0e7ff;
+    color: #4338ca;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.db-title {
+    font-size: 36px;
+    color: #0f172a;
+    font-weight: 800;
+    margin-bottom: 12px;
+}
+
+.db-title span {
+    color: #2563eb;
+}
+
+.db-desc {
+    color: #64748b;
+    font-size: 16px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* Kategori Tabs */
+.db-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+}
+
+.db-tab {
+    padding: 10px 20px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 30px;
+    color: #475569;
+    font-weight: 500;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.db-tab:hover {
+    border-color: #cbd5e1;
+    background: #f1f5f9;
+}
+
+.db-tab.active {
+    background: #2563eb;
+    color: white;
+    border-color: #2563eb;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+}
+
+/* Grid layout for items, reusing bc- classes from Beranda */
+.db-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 25px;
+}
+
+.db-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: #64748b;
+    font-size: 18px;
+    background: white;
+    border-radius: 16px;
+    border: 1px dashed #cbd5e1;
+}
+
+/* loader */
+.db-loader {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 400px;
+    font-size: 18px;
+    color: #64748b;
+}
+
+.db-loader svg {
+    animation: spin 1s linear infinite;
+    margin-right: 10px;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
