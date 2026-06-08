@@ -16,6 +16,7 @@ export default function Auth() {
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
+  const [regMfa, setRegMfa] = useState('');
   const [regInvalid, setRegInvalid] = useState(false);
 
   const [capsLockLogin, setCapsLockLogin] = useState(false);
@@ -77,6 +78,11 @@ export default function Auth() {
       return;
     }
 
+    if (!loginEmail.endsWith('@kampus.ac.id') && loginEmail !== 'admin') {
+      addToast('error', 'Gunakan email kampus (@kampus.ac.id) untuk login.');
+      return;
+    }
+
     try {
       const res = await fetch('http://localhost:3000/api/login', {
         method: 'POST',
@@ -113,11 +119,21 @@ export default function Auth() {
       return;
     }
 
+    if (!/^\d+$/.test(regNim)) {
+      addToast('error', 'NIM wajib diisi angka saja tanpa spasi, huruf, atau simbol.');
+      return;
+    }
+
+    if (!regEmail.endsWith('@kampus.ac.id')) {
+      addToast('error', 'Pendaftaran wajib menggunakan email kampus (@kampus.ac.id).');
+      return;
+    }
+
     try {
       const res = await fetch('http://localhost:3000/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nim: regNim, nama: regName, email: regEmail, password: regPassword, role: 'anggota' })
+        body: JSON.stringify({ nim: regNim, nama: regName, email: regEmail, password: regPassword, role: 'anggota', mfaCode: regMfa })
       });
       const data = await res.json();
       if (data.success) {
@@ -141,16 +157,16 @@ export default function Auth() {
         <div className="copy" aria-hidden="true">
           <div className="box copy-register">
             <div>
-              <h1>WELCOME<br />BACK!</h1>
-              <p>Buat akun untuk mulai menggunakan dashboard.</p>
-              <button className="cta" onClick={(e) => toggleTab(e, 'login')}>Login</button>
+              <h1 style={{fontSize: '40px', marginBottom: '12px', fontWeight: '800'}}>WELCOME<br />BACK!</h1>
+              <p style={{fontSize: '15px', color: '#f8fafc', lineHeight: '1.6'}}>Sudah punya akun? Masuk sekarang untuk meminjam alat dan mengecek status *request* kamu.</p>
+              <button className="cta" onClick={(e) => toggleTab(e, 'login')}>Login Sekarang</button>
             </div>
           </div>
           <div className="box copy-login">
             <div>
-              <h1>WELCOME<br />BACK!</h1>
-              <p>Masuk untuk mengelola sistem parkir.</p>
-              <button className="cta" onClick={(e) => toggleTab(e, 'register')}>Sign Up</button>
+              <h1 style={{fontSize: '40px', marginBottom: '12px', fontWeight: '800'}}>HELLO,<br />STUDENT!</h1>
+              <p style={{fontSize: '15px', color: '#f8fafc', lineHeight: '1.6'}}>Belum punya akun? Hubungi admin untuk mendaftar. Mulai eksplorasi dan meminjam inventaris PENS.</p>
+              <button className="cta" onClick={(e) => toggleTab(e, 'register')}>Daftar Akun</button>
             </div>
           </div>
         </div>
@@ -159,8 +175,9 @@ export default function Auth() {
 
         <section className="pane pane-login">
           <div className="card" role="region" aria-label="Form Login">
-            <h2>Login</h2>
-            <div className="underline"></div>
+            <h2 style={{fontSize: '32px', fontWeight: '800', color: '#0f172a', marginBottom: '8px'}}>Masuk Akun</h2>
+            <p style={{fontSize: '14px', color: '#64748b', marginBottom: '20px'}}>Silakan masuk menggunakan email @kampus.ac.id.</p>
+            <div className="underline" style={{marginBottom: '24px'}}></div>
 
             <form onSubmit={handleLoginSubmit} noValidate autoComplete="off">
               <div className={`field ${loginInvalid && !loginEmail ? 'invalid' : ''}`}>
@@ -198,20 +215,24 @@ export default function Auth() {
               <button className="btn" type="submit">Login</button>
             </form>
 
-            <div className="tabs">
-              Don't have an account? <button className="link-btn" onClick={(e) => toggleTab(e, 'register')}>Sign Up</button>
+            <div className="tabs" style={{marginTop: '20px', textAlign: 'center'}}>
+              Belum punya akun? <button className="link-btn" onClick={(e) => toggleTab(e, 'register')}>Daftar di sini</button>
             </div>
           </div>
         </section>
 
         <section className="pane pane-register">
           <div className="card" role="region" aria-label="Form Sign Up">
-            <h2>Sign Up</h2>
-            <div className="underline"></div>
+            <h2 style={{fontSize: '32px', fontWeight: '800', color: '#0f172a', marginBottom: '8px'}}>Daftar Baru</h2>
+            <p style={{fontSize: '14px', color: '#64748b', marginBottom: '20px'}}>Buat akun mahasiswa untuk akses peminjaman.</p>
+            <div className="underline" style={{marginBottom: '24px'}}></div>
 
             <form onSubmit={handleRegisterSubmit} noValidate autoComplete="off">
               <div className={`field ${regInvalid && !regNim ? 'invalid' : ''}`}>
-                <input id="rnim" type="text" name="nim" required autoComplete="off" placeholder=" " value={regNim} onChange={e => setRegNim(e.target.value)} />
+                <input id="rnim" type="text" name="nim" pattern="\d+" title="Hanya angka yang diperbolehkan" required autoComplete="off" placeholder=" " value={regNim} onChange={e => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d+$/.test(val)) setRegNim(val);
+                }} />
                 <label htmlFor="rnim">NIM</label>
                 <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -253,11 +274,18 @@ export default function Auth() {
                 </svg>
                 <div className={`caps-tip ${capsLockReg ? 'show' : ''}`}>CapsLock ON</div>
               </div>
-              <button className="btn" type="submit">Sign Up</button>
+              <div className={`field ${regInvalid && !regMfa ? 'invalid' : ''}`}>
+                <input id="rmfa" type="text" name="mfaCode" required autoComplete="off" placeholder=" " value={regMfa} onChange={e => setRegMfa(e.target.value)} />
+                <label htmlFor="rmfa">Kode Verifikasi</label>
+                <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+              </div>
+              <button className="btn" type="submit" style={{marginTop: '16px'}}>Daftar Sekarang</button>
             </form>
 
-            <div className="tabs">
-              Already have an account? <button className="link-btn" onClick={(e) => toggleTab(e, 'login')}>Login</button>
+            <div className="tabs" style={{marginTop: '20px', textAlign: 'center'}}>
+              Sudah punya akun? <button className="link-btn" onClick={(e) => toggleTab(e, 'login')}>Masuk</button>
             </div>
           </div>
         </section>

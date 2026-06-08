@@ -72,8 +72,14 @@ function FileField({ id, label, file, onChange, onRemove }) {
 }
 
 /* ── Main Modal ──────────────────────────────────────── */
-export default function BookingModal({ barang, bookedDates = [], onClose, onSuccess }) {
-  const todayStr = new Date().toISOString().split('T')[0];
+export default function BookingModal({ barang, isCartMode = false, cartItems = [], bookedDates = [], onClose, onSuccess }) {
+  const getLocalDateStr = (dateObj = new Date()) => {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+  const todayStr = getLocalDateStr();
 
   // Calendar state
   const [view, setView] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
@@ -87,13 +93,27 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
   const [catatan, setCatatan] = useState('');
   const [fileKtm, setFileKtm] = useState(null);
   const [fileWajah, setFileWajah] = useState(null);
+  const [fileSurat, setFileSurat] = useState(null);
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [blacklistMsg, setBlacklistMsg] = useState('');
+
+  useEffect(() => {
+    authFetch(`${API}/api/peminjaman/cek-blacklist`)
+      .then(res => res.json())
+      .then(data => {
+          if (data.status === 'blacklisted') setBlacklistMsg(data.message);
+      })
+      .catch(console.error);
+  }, []);
 
   const addToast = (type, message) => {
     const id = Date.now() + Math.random();
-    setToasts(prev => [...prev, { id, type, message }]);
+    setToasts(prev => {
+        if (prev.some(t => t.message === message)) return prev;
+        return [...prev, { id, type, message }];
+    });
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500);
   };
   const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
@@ -111,13 +131,10 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const toISO = (d) => {
-    const dd = new Date(year, month, d);
-    return dd.toISOString().split('T')[0];
-  };
-
-  const isBooked = (d) => {
-    const iso = toISO(d);
-    return bookedDates.some(r => iso >= r.tanggal_pinjam && iso <= r.tanggal_kembali);
+    const yy = year;
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
   };
 
   const isPast = (d) => toISO(d) < todayStr;
@@ -132,7 +149,7 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
   };
 
   const handleDayClick = (d) => {
-    if (isPast(d) || isBooked(d)) return;
+    if (isPast(d)) return;
     const iso = toISO(d);
     if (pickStep === 'start') {
       setTPinjam(iso); setTKembali(''); setPick('end');
@@ -141,19 +158,6 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
         setTPinjam(iso); setTKembali(''); setPick('end'); 
       }
       else { 
-        let hasConflict = false;
-        if (bookedDates && bookedDates.length > 0) {
-          for (const b of bookedDates) {
-            if (b.tanggal_pinjam <= iso && b.tanggal_kembali >= tPinjam) {
-              hasConflict = true;
-              break;
-            }
-          }
-        }
-        if (hasConflict) {
-          addToast('error', 'Rentang tanggal bertabrakan dengan jadwal yang sudah dibooking.');
-          return;
-        }
         setTKembali(iso); setPick('start'); 
       }
     }
@@ -175,16 +179,22 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
     if (!catatan.trim()) { addToast('error', 'Catatan / keperluan wajib diisi.'); setStep(1); return; }
     if (!fileKtm) { addToast('error', 'Foto / Scan KTM wajib diunggah.'); return; }
     if (!fileWajah) { addToast('error', 'Foto selfie / wajah wajib diunggah.'); return; }
+    if (!fileSurat) { addToast('error', 'Surat Permohonan Resmi wajib diunggah.'); return; }
     setLoading(true);
     try {
       const fd = new FormData();
-      fd.append('id_barang', barang.id_barang);
-      fd.append('jumlah', jumlah);
+      if (isCartMode) {
+        fd.append('cart_items', JSON.stringify(cartItems));
+      } else {
+        fd.append('id_barang', barang.id_barang);
+        fd.append('jumlah', jumlah);
+      }
       fd.append('tanggal_pinjam', tPinjam);
       fd.append('tanggal_kembali', tKembali);
       fd.append('catatan_user', catatan);
       fd.append('bukti_ktm', fileKtm);
       fd.append('bukti_wajah', fileWajah);
+      fd.append('surat_permohonan', fileSurat);
 
       const res = await authFetch(`${API}/peminjaman`, { method: 'POST', body: fd });
       const data = await res.json();
@@ -208,17 +218,27 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
         {/* Header */}
         <div className="bm-header">
           <div className="bm-hd-left">
-            <div>
-              <p className="bm-hd-cat">{barang?.nama_kategori || 'Umum'}</p>
-              <h2 className="bm-hd-name">{barang?.nama_barang}</h2>
-              <div className="bm-hd-chips">
-                {barang?.lokasi && <span className="bm-chip">📍 {barang.lokasi}</span>}
-                {barang?.kondisi && <span className="bm-chip">🔧 {barang.kondisi}</span>}
-                <span className={`bm-chip ${barang?.stok > 0 ? 'bm-chip-green' : 'bm-chip-red'}`}>
-                  {barang?.stok > 0 ? `✓ ${barang.stok} unit tersedia` : '✗ Stok habis'}
-                </span>
+            {isCartMode ? (
+              <div>
+                <p className="bm-hd-cat">Keranjang Peminjaman</p>
+                <h2 className="bm-hd-name">{cartItems.length} Alat Dipilih</h2>
+                <div className="bm-hd-chips">
+                  <span className="bm-chip">Pastikan semua alat dibutuhkan</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <p className="bm-hd-cat">{barang?.nama_kategori || 'Umum'}</p>
+                <h2 className="bm-hd-name">{barang?.nama_barang}</h2>
+                <div className="bm-hd-chips">
+                  {barang?.lokasi && <span className="bm-chip">📍 {barang.lokasi}</span>}
+                  {barang?.kondisi && <span className="bm-chip">🔧 {barang.kondisi}</span>}
+                  <span className={`bm-chip ${barang?.stok > 0 ? 'bm-chip-green' : 'bm-chip-red'}`}>
+                    {barang?.stok > 0 ? `✓ ${barang.stok} unit tersedia` : '✗ Stok habis'}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
           <button className="bm-close" onClick={onClose} aria-label="Tutup">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -226,6 +246,12 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
             </svg>
           </button>
         </div>
+
+        {blacklistMsg && (
+          <div style={{ background: '#fef2f2', borderLeft: '4px solid #ef4444', color: '#b91c1c', padding: '12px 20px', fontSize: '14px', fontWeight: '500' }}>
+            <span style={{ marginRight: '8px' }}>⚠️</span> {blacklistMsg}
+          </div>
+        )}
 
         {/* Steps */}
         <div className="bm-steps">
@@ -262,20 +288,19 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
                 <div className="bm-cal-grid">
                   {DAYS.map(w => <div key={w} className="bm-cal-wd">{w}</div>)}
                   {cells.map((d, i) => {
-                    if (!d) return <div key={`e${i}`} />;
-                    const iso = toISO(d);
+                    if (!d) return <div key={i} className="bm-cal-d bm-cal-empty" />;
                     const past = isPast(d);
-                    const booked = isBooked(d);
-                    const inRange = isInRange(d);
+                    const iso = toISO(d);
                     const isStart = iso === tPinjam;
                     const isEnd = iso === tKembali;
-                    const isHov = hovered === iso && pickStep === 'end';
+                    const inRange = isInRange(d);
+                    const isHov = hovered === iso;
+                    
                     return (
-                      <div key={d}
+                      <div key={i}
                         className={[
                           'bm-cal-d',
-                          past || booked ? 'bm-d-off' : 'bm-d-on',
-                          booked ? 'bm-d-booked' : '',
+                          past ? 'bm-d-off' : 'bm-d-on',
                           isStart ? 'bm-d-start' : '',
                           isEnd ? 'bm-d-end' : '',
                           inRange ? 'bm-d-range' : '',
@@ -284,17 +309,16 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
                         onClick={() => handleDayClick(d)}
                         onMouseEnter={() => pickStep === 'end' && setHovered(iso)}
                         onMouseLeave={() => setHovered(null)}
-                        role="button" tabIndex={past || booked ? -1 : 0}
+                        role="button" tabIndex={past ? -1 : 0}
                         onKeyDown={e => e.key === 'Enter' && handleDayClick(d)}
                         aria-label={`${d} ${MONTHS[month]} ${year}`}
-                        aria-disabled={past || booked}
+                        aria-disabled={past}
                       >{d}</div>
                     );
                   })}
                 </div>
                 <div className="bm-cal-leg">
                   <span><span className="bm-leg bm-leg-av" />Tersedia</span>
-                  <span><span className="bm-leg bm-leg-bk" />Dibooking</span>
                   <span><span className="bm-leg bm-leg-sel" />Dipilih</span>
                 </div>
               </div>
@@ -323,14 +347,28 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
                   </div>
                 )}
 
-                <div className="bm-field">
-                  <label className="bm-lbl">Jumlah Unit</label>
-                  <div className="bm-qty">
-                    <button type="button" onClick={() => setJumlah(j => Math.max(1, j - 1))}>−</button>
-                    <span>{jumlah}</span>
-                    <button type="button" onClick={() => setJumlah(j => Math.min(barang?.stok || 99, j + 1))}>+</button>
+                {isCartMode ? (
+                  <div className="bm-field">
+                    <label className="bm-lbl">Ringkasan Keranjang</label>
+                    <div className="bm-cart-summary-list" style={{ maxHeight: '120px', overflowY: 'auto', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px' }}>
+                      {cartItems.map((c, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', paddingBottom: '5px', borderBottom: i < cartItems.length-1 ? '1px solid #e2e8f0' : 'none' }}>
+                              <span>{c.nama_barang}</span>
+                              <strong>{c.jumlah} unit</strong>
+                          </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="bm-field">
+                    <label className="bm-lbl">Jumlah Unit</label>
+                    <div className="bm-qty">
+                      <button type="button" onClick={() => setJumlah(j => Math.max(1, j - 1))}>−</button>
+                      <span>{jumlah}</span>
+                      <button type="button" onClick={() => setJumlah(j => Math.min(barang?.stok || 99, j + 1))}>+</button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="bm-field" style={{ flex: 1 }}>
                   <label className="bm-lbl" htmlFor="catatan">
@@ -354,16 +392,18 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
                   file={fileKtm} onChange={setFileKtm} onRemove={() => setFileKtm(null)} />
                 <FileField id="wajah" label="📸 Foto Selfie / Wajah (Wajib)"
                   file={fileWajah} onChange={setFileWajah} onRemove={() => setFileWajah(null)} />
+                <FileField id="surat" label="📝 Surat Permohonan (Wajib)"
+                  file={fileSurat} onChange={setFileSurat} onRemove={() => setFileSurat(null)} />
               </div>
 
               {/* Ringkasan */}
               <div className="bm-summary">
                 <h4>Ringkasan Pengajuan</h4>
-                <div className="bm-sum-row"><span>Barang</span><strong>{barang?.nama_barang}</strong></div>
+                <div className="bm-sum-row"><span>Barang</span><strong>{isCartMode ? `${cartItems.length} Alat` : barang?.nama_barang}</strong></div>
                 <div className="bm-sum-row"><span>Tanggal Pinjam</span><strong>{fmt(tPinjam)}</strong></div>
                 <div className="bm-sum-row"><span>Tanggal Kembali</span><strong>{fmt(tKembali)}</strong></div>
                 <div className="bm-sum-row"><span>Durasi</span><strong>{durasi} hari</strong></div>
-                <div className="bm-sum-row"><span>Jumlah</span><strong>{jumlah} unit</strong></div>
+                {!isCartMode && <div className="bm-sum-row"><span>Jumlah</span><strong>{jumlah} unit</strong></div>}
                 {catatan && <div className="bm-sum-row"><span>Catatan</span><strong>{catatan}</strong></div>}
               </div>
             </div>
@@ -373,7 +413,7 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
             {step === 1 ? (
               <>
                 <button type="button" className="bm-btn-sec" onClick={onClose}>Batal</button>
-                <button type="button" className="bm-btn-pri" onClick={goNext}>
+                <button type="button" className="bm-btn-pri" onClick={goNext} disabled={!!blacklistMsg}>
                   Lanjut Upload Dokumen
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
                 </button>
@@ -384,7 +424,7 @@ export default function BookingModal({ barang, bookedDates = [], onClose, onSucc
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
                   Kembali
                 </button>
-                <button type="submit" className="bm-btn-pri" disabled={loading}>
+                <button type="submit" className="bm-btn-pri" disabled={loading || !!blacklistMsg}>
                   {loading ? <span className="bm-spin" /> : <>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
                     Kirim Pengajuan

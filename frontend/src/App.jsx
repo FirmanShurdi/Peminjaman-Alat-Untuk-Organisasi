@@ -11,6 +11,8 @@ import ComingSoon from './pages/ComingSoon'
 import Detail from './pages/Detail'
 import DaftarBarang from './pages/DaftarBarang'
 import RiwayatPeminjaman from './pages/RiwayatPeminjaman'
+import CartWidget from './partials/CartWidget'
+import Users from './pages/admin/users/users'
 
 export const ThemeContext = createContext();
 
@@ -68,6 +70,7 @@ function App() {
   return (
     <ThemeContext.Provider value={{ dark, toggleTheme }}>
       <BrowserRouter>
+        <CartWidget />
         <Routes>
           <Route path="/" element={<Beranda />} />
           <Route path="/beranda" element={<Beranda />} />
@@ -85,7 +88,7 @@ function App() {
           <Route path="/peminjaman/:id" element={<ProtectedRoute adminOnly={true}><PeminjamanEdit /></ProtectedRoute>} />
           <Route path="/kategori" element={<ProtectedRoute adminOnly={true}><ComingSoon /></ProtectedRoute>} />
           <Route path="/riwayat" element={<ProtectedRoute adminOnly={true}><ComingSoon /></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute adminOnly={true}><ComingSoon /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute adminOnly={true}><Users /></ProtectedRoute>} />
           <Route path="/notifikasi" element={<ProtectedRoute adminOnly={true}><ComingSoon /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

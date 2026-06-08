@@ -13,8 +13,10 @@ const STATUS_CONFIG = {
   diambil:    { label: 'Diambil',    color: '#8b5cf6', bg: '#ede9fe'},
   terlambat:  { label: 'Terlambat',  color: '#ef4444', bg: '#fee2e2'},
   selesai:    { label: 'Selesai',    color: '#10b981', bg: '#d1fae5'},
+  selesai_terlambat: { label: 'Selesai (Terlambat)', color: '#b91c1c', bg: '#fee2e2' },
   ditolak:    { label: 'Ditolak',    color: '#6b7280', bg: '#f3f4f6' },
   dibatalkan: { label: 'Dibatalkan', color: '#6b7280', bg: '#f3f4f6' },
+  bermasalah: { label: 'Bermasalah', color: '#be123c', bg: '#ffe4e6' },
 };
 
 function StatusBadge({ status }) {
@@ -26,7 +28,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function DetailModal({ item, onClose, onCancel }) {
+function DetailModal({ item, user, onClose, onCancel, onUploadMasalah }) {
   const [fullscreenImg, setFullscreenImg] = useState(null);
 
   if (!item) return null;
@@ -43,9 +45,28 @@ function DetailModal({ item, onClose, onCancel }) {
   return (
     <div className="rp-modal-backdrop" onClick={onClose}>
       {fullscreenImg && (
-        <div className="rp-fs-overlay" onClick={(e) => { e.stopPropagation(); setFullscreenImg(null); }}>
-          <button className="rp-fs-close" onClick={() => setFullscreenImg(null)}>✕</button>
-          <img src={fullscreenImg} alt="Fullscreen Bukti" className="rp-fs-img" onClick={e => e.stopPropagation()} />
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={() => setFullscreenImg(null)}>
+            <div style={{ position: 'relative', width: '100%', maxWidth: '800px', maxHeight: '90vh', background: '#fff', borderRadius: '12px', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }} onClick={e => e.stopPropagation()}>
+                <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+                    <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b', fontWeight: '600' }}>Pratinjau Dokumen</h3>
+                    <button onClick={() => setFullscreenImg(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '4px' }} onMouseEnter={(e) => e.target.style.background = '#e2e8f0'} onMouseLeave={(e) => e.target.style.background = 'transparent'}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ pointerEvents: 'none' }}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+                <div style={{ flex: 1, overflow: 'auto', padding: '20px', textAlign: 'center', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {fullscreenImg.toLowerCase().endsWith('.pdf') ? (
+                        <iframe src={fullscreenImg} style={{ width: '100%', height: '70vh', border: 'none', borderRadius: '8px', background: '#fff' }} title="Pratinjau PDF" />
+                    ) : (
+                        <img src={fullscreenImg} alt="Pratinjau Dokumen" style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
+                    )}
+                </div>
+                <div style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', background: '#fff' }}>
+                    <a href={fullscreenImg} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', background: '#2563eb', color: '#fff', padding: '8px 16px', borderRadius: '6px', fontSize: '14px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#1d4ed8'} onMouseLeave={(e) => e.target.style.background = '#2563eb'}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Buka di Tab Baru
+                    </a>
+                </div>
+            </div>
         </div>
       )}
       <div className="rp-modal-box" onClick={e => e.stopPropagation()}>
@@ -123,9 +144,9 @@ function DetailModal({ item, onClose, onCancel }) {
           </div>
 
           {/* ── Barcode Pengambilan/Pengembalian ── */}
-          {(item.status === 'disetujui' || item.status === 'diambil') && (() => {
+          {(item.status === 'disetujui' || item.status === 'diambil' || item.status === 'terlambat') && (() => {
             const genCode = (id) => ((id * 2654435761) >>> 0).toString(16).substring(0, 6).toUpperCase().padStart(6, '0');
-            const randomCode = `PMJ-${genCode(item.id_peminjaman)}`;
+            const randomCode = item.no_pesanan ? `PMJ-${item.no_pesanan}` : `PMJ-${genCode(item.id_peminjaman)}`;
             return (
             <div className="rp-modal-section" style={{ textAlign: 'center', background: '#f8fafc', padding: '24px 20px', borderRadius: '12px', marginBottom: '24px', border: '2px dashed #cbd5e1' }}>
               <h3 style={{ marginBottom: '8px', color: '#0f172a', fontSize: '16px' }}>Kode Verifikasi Peminjaman</h3>
@@ -149,6 +170,7 @@ function DetailModal({ item, onClose, onCancel }) {
           {/* ── Bukti Dokumen Anggota ── */}
           <div className="rp-modal-section">
             <h3>Bukti Dokumen Anggota</h3>
+
             <div className="rp-bukti-row">
               {imgBase(item.bukti_ktm) ? (
                 <div className="rp-bukti-item rp-bukti-clickable" onClick={() => setFullscreenImg(imgBase(item.bukti_ktm))}>
@@ -172,14 +194,26 @@ function DetailModal({ item, onClose, onCancel }) {
               ) : (
                 <div className="rp-bukti-empty">Belum ada foto selfie</div>
               )}
+              {imgBase(item.surat_permohonan) ? (
+                <div className="rp-bukti-item rp-bukti-clickable" onClick={() => setFullscreenImg(imgBase(item.surat_permohonan))}>
+                  <p>📝 Surat Permohonan</p>
+                  <div className="rp-bukti-icon-box">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>Lihat Surat</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="rp-bukti-empty">Belum ada surat permohonan</div>
+              )}
             </div>
           </div>
 
           {/* ── Bukti Serah Terima Admin (diambil/selesai) ── */}
+          {/* ── Bukti Serah Terima Admin (diambil/selesai) ── */}
           {imgBase(item.bukti) && (
             <div className="rp-modal-section">
               <h3>
-                {item.status === 'selesai' ? '✅ Bukti Pengembalian' : '📦 Bukti Pengambilan'}
+                {item.status === 'selesai' ? '✅ Bukti Pengembalian' : (item.status === 'bermasalah' && item.bukti.includes('penyelesaian') ? '✅ Bukti Penyelesaian Anda' : '📦 Bukti Pengambilan')}
               </h3>
               <div className="rp-bukti-row">
                 <div className="rp-bukti-item rp-bukti-admin rp-bukti-clickable" onClick={() => setFullscreenImg(imgBase(item.bukti))}>
@@ -190,6 +224,69 @@ function DetailModal({ item, onClose, onCancel }) {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── Action Penyelesaian Bermasalah ── */}
+          {item.status === 'bermasalah' && (
+            <div className="rp-modal-section" style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '12px', padding: '16px' }}>
+              <h3 style={{ color: '#be123c', marginBottom: '12px' }}>Tindakan Diperlukan</h3>
+              {item.jenis_denda === 'denda' ? (
+                <>
+                  <p style={{ fontSize: '13px', color: '#881337', marginBottom: '12px' }}>
+                    Admin mengkonfirmasi denda sebesar <strong>Rp. {item.nominal_denda ? item.nominal_denda.toLocaleString('id-ID') : 0}</strong> untuk barang {item.nama_barang}. Harap menyelesaikan pembayaran ke QRIS berikut dan hubungi Admin untuk konfirmasi.
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                    <div 
+                      onClick={() => setFullscreenImg(`${API}/QR/Qris.jpeg`)}
+                      style={{ textAlign: 'center', background: '#fff', padding: '12px', borderRadius: '8px', border: '1px solid #fecaca', cursor: 'pointer', transition: 'transform 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
+                      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      title="Klik untuk melihat Qris layar penuh"
+                    >
+                      <img 
+                        src={`${API}/QR/Qris.jpeg`} 
+                        alt="QRIS Pembayaran" 
+                        style={{ width: '150px', height: '150px', objectFit: 'contain' }}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.parentElement.innerHTML = '<div style="width: 150px; height: 150px; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 12px; text-align: center;">[Gambar QRIS Admin]</div>';
+                        }}
+                      />
+                    </div>
+                    <div style={{ color: '#be123c', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'translateX(-2px)' }}><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+                      klik
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p style={{ fontSize: '13px', color: '#881337', marginBottom: '16px' }}>
+                  Admin mengkonfirmasi untuk mengganti barang {item.nama_barang} dengan jumlah {item.jumlah_ganti || 1} pcs. Harap menyerahkannya segera ke admin.
+                </p>
+              )}
+              
+              {item.catatan_admin && (
+                <div style={{ background: '#fff1f2', borderLeft: '3px solid #e11d48', padding: '8px 12px', marginBottom: '16px', borderRadius: '4px' }}>
+                  <p style={{ fontSize: '12px', margin: 0, color: '#9f1239' }}>
+                    <strong>Note:</strong> {item.catatan_admin}
+                  </p>
+                </div>
+              )}
+
+              <a 
+                href={`https://wa.me/6283119127384?text=${encodeURIComponent(`saya ${user?.nama || 'user'} ingin menyerahkan pengembalian barang ${item.nama_barang} berjumlah ${item.jenis_denda === 'denda' ? `Rp. ${item.nominal_denda ? item.nominal_denda.toLocaleString('id-ID') : 0}` : `${item.jumlah_ganti || 1} pcs`}, mohon konfirmasikan untuk tempat pengembaliannya`)}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  background: '#3383c0ff', color: '#fff', padding: '8px 16px', borderRadius: '6px',
+                  textDecoration: 'none', fontSize: '14px', fontWeight: 'bold'
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                Hubungi Admin
+              </a>
             </div>
           )}
 
@@ -246,6 +343,18 @@ export default function RiwayatPeminjaman() {
     fetchRiwayat();
   }, []);
 
+  // Pop global flash (e.g. from Cart/Detail redirect)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('_flash');
+      if (raw) {
+        const flash = JSON.parse(raw);
+        localStorage.removeItem('_flash');
+        addToast(flash.type, flash.message);
+      }
+    } catch (_) {}
+  }, []);
+
   const fetchRiwayat = async () => {
     setLoading(true);
     try {
@@ -290,15 +399,39 @@ export default function RiwayatPeminjaman() {
     }
   };
 
+  const handleUploadBuktiMasalah = async (id_peminjaman, file) => {
+    try {
+      const fd = new FormData();
+      fd.append('bukti', file);
+      
+      const res = await authFetch(`${API}/api/peminjaman/${id_peminjaman}/upload-bukti-masalah`, {
+        method: 'PATCH',
+        body: fd
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast('success', data.message || 'Bukti berhasil diunggah.');
+        setSelectedItem(null);
+        fetchRiwayat();
+      } else {
+        addToast('error', data.message || 'Gagal mengunggah bukti.');
+      }
+    } catch (err) {
+      addToast('error', 'Terjadi kesalahan koneksi.');
+    }
+  };
+
   return (
     <div className="rp-page">
       <Navbar user={user} currentSection={-1} goTo={() => {}} onFlash={addToast} />
       <Flash toasts={toasts} removeToast={removeToast} />
       {selectedItem && (
         <DetailModal 
-          item={selectedItem} 
+          item={selectedItem}
+          user={user} 
           onClose={() => setSelectedItem(null)} 
           onCancel={handleCancelPeminjaman}
+          onUploadMasalah={handleUploadBuktiMasalah}
         />
       )}
 
@@ -354,33 +487,47 @@ export default function RiwayatPeminjaman() {
           </div>
         ) : (
           <div className="rp-list">
-            {filtered.map(item => {
+            {filtered.map((item, i) => {
               const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.menunggu;
+              
+              const isGrouped = item.no_pesanan && filtered.filter(x => x.no_pesanan === item.no_pesanan).length > 1;
+              const isFirstInGroup = isGrouped && (i === 0 || filtered[i - 1].no_pesanan !== item.no_pesanan);
+              const isLastInGroup = isGrouped && (i === filtered.length - 1 || filtered[i + 1].no_pesanan !== item.no_pesanan);
+
               return (
-                <div key={item.id_peminjaman} className="rp-card" onClick={() => setSelectedItem(item)}>
-                  <div className="rp-card-img">
-                    {item.gambar ? (
-                      <img src={item.gambar.startsWith('http') ? item.gambar : `${API}/barang/${item.gambar}`} alt={item.nama_barang} />
-                    ) : (
-                      <div className="rp-card-no-img"></div>
-                    )}
-                  </div>
-                  <div className="rp-card-body">
-                    <div className="rp-card-top">
-                      <h3 className="rp-card-name">{item.nama_barang}</h3>
-                      <StatusBadge status={item.status} />
+                <div key={item.id_peminjaman} style={{ display: 'flex', alignItems: 'stretch' }}>
+                  {isGrouped && (
+                    <div style={{ width: '24px', position: 'relative', display: 'flex', justifyContent: 'center', flexShrink: 0, marginRight: '10px' }}>
+                      {!isFirstInGroup && <div style={{ position: 'absolute', top: '-6px', bottom: '50%', width: '2.5px', background: 'rgba(59, 130, 246, 0.5)' }} />}
+                      {!isLastInGroup && <div style={{ position: 'absolute', top: '50%', bottom: '-6px', width: '2.5px', background: 'rgba(59, 130, 246, 0.5)' }} />}
+                      <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: '10px', height: '10px', borderRadius: '50%', border: '2.5px solid #3b82f6', background: 'white', zIndex: 1 }} />
                     </div>
-                    <div className="rp-card-meta">
-                      <span>📅 {formatDate(item.tanggal_pinjam)} – {formatDate(item.tanggal_kembali)}</span>
-                      <span><strong> {item.jumlah} unit </strong></span>
-                      <span>🕐 Diajukan {formatDate(item.created_at)}</span>
+                  )}
+                  <div className="rp-card" onClick={() => setSelectedItem(item)} style={{ flex: 1, minWidth: 0 }}>
+                    <div className="rp-card-img">
+                      {item.gambar ? (
+                        <img src={item.gambar.startsWith('http') ? item.gambar : `${API}/barang/${item.gambar}`} alt={item.nama_barang} />
+                      ) : (
+                        <div className="rp-card-no-img"></div>
+                      )}
                     </div>
-                    {item.catatan_admin && (
-                      <p className="rp-card-catatan">💬 {item.catatan_admin}</p>
-                    )}
-                  </div>
-                  <div className="rp-card-arrow">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <div className="rp-card-body">
+                      <div className="rp-card-top">
+                        <h3 className="rp-card-name">{item.nama_barang}</h3>
+                        <StatusBadge status={item.status} />
+                      </div>
+                      <div className="rp-card-meta">
+                        <span>📅 {formatDate(item.tanggal_pinjam)} – {formatDate(item.tanggal_kembali)}</span>
+                        <span><strong> {item.jumlah} unit </strong></span>
+                        <span>🕐 Diajukan {formatDate(item.created_at)}</span>
+                      </div>
+                      {item.catatan_admin && (
+                        <p className="rp-card-catatan">💬 {item.catatan_admin}</p>
+                      )}
+                    </div>
+                    <div className="rp-card-arrow">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </div>
                   </div>
                 </div>
               );
@@ -391,3 +538,4 @@ export default function RiwayatPeminjaman() {
     </div>
   );
 }
+    

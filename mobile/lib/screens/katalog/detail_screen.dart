@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+
 import 'package:intl/intl.dart';
+import '../../main.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:provider/provider.dart';
 import '../../core/api_service.dart';
 import '../../core/constants.dart';
-
+import '../../core/cart_provider.dart';
+import '../../partials/flash_message.dart';
 class DetailScreen extends StatefulWidget {
   const DetailScreen({super.key});
   @override
@@ -14,6 +18,7 @@ class DetailScreen extends StatefulWidget {
 class _DetailScreenState extends State<DetailScreen> {
   dynamic _barang;
   List<dynamic> _bookedDates = [];
+  final Set<String> _bookedSet = {};
   bool _loading = true;
 
   @override
@@ -33,6 +38,16 @@ class _DetailScreenState extends State<DetailScreen> {
       setState(() {
         _barang = bData['data'];
         _bookedDates = dData['data'] ?? [];
+        _bookedSet.clear();
+        for (final bd in _bookedDates) {
+          try {
+            final s = DateTime.parse(bd['tanggal_pinjam']);
+            final e = DateTime.parse(bd['tanggal_kembali']);
+            for (var dt = s; dt.isBefore(e.add(const Duration(days: 1))); dt = dt.add(const Duration(days: 1))) {
+              _bookedSet.add(DateFormat('yyyy-MM-dd').format(dt));
+            }
+          } catch (_) {}
+        }
       });
     } catch (_) {}
     setState(() => _loading = false);
@@ -41,7 +56,7 @@ class _DetailScreenState extends State<DetailScreen> {
   @override
   Widget build(BuildContext context) {
     final imgUrl = (_barang != null && _barang['gambar'] != null && _barang['gambar'] != '')
-        ? '${AppConst.baseUrl}/barang/${_barang['gambar']}'
+        ? '${AppConst.imageBaseUrl}/barang/${_barang['gambar']}'
         : null;
 
     return Scaffold(
@@ -50,60 +65,155 @@ class _DetailScreenState extends State<DetailScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _barang == null
               ? const Center(child: Text('Barang tidak ditemukan'))
-              : CustomScrollView(
-                  slivers: [
-                    // Image header
-                    SliverAppBar(
-                      expandedHeight: 260,
-                      pinned: true,
-                      backgroundColor: AppConst.primary,
-                      leading: IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      flexibleSpace: FlexibleSpaceBar(
-                        background: imgUrl != null
-                            ? Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (_, _, _) => Container(color: AppConst.primary))
-                            : Container(
-                                color: AppConst.primary,
-                                child: const Center(child: Icon(Icons.inventory_2_rounded, color: Colors.white54, size: 64)),
-                              ),
+              : Column(
+                  children: [
+                    // Top Bar (Custom)
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 16, 20, 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]),
+                              child: const Icon(Icons.arrow_back_ios_new_rounded, color: AppConst.textPrimary, size: 20),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              _appBarIcon(Icons.notifications_outlined, () {}),
+                              const SizedBox(width: 12),
+                              _appBarIcon(Icons.shopping_cart_outlined, () {
+                                Navigator.pushNamed(context, '/cart');
+                              }, badgeCount: context.watch<CartProvider>().items.length),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-
-                    // Content
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
+                    Expanded(
+                      child: SingleChildScrollView(
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Kategori badge
+                            // Detached Image Card
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              margin: const EdgeInsets.symmetric(horizontal: 20),
+                              height: 280,
                               decoration: BoxDecoration(
                                 color: AppConst.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(24),
+                                image: imgUrl != null
+                                    ? DecorationImage(
+                                        image: NetworkImage(imgUrl),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                               ),
-                              child: Text(_barang['nama_kategori'] ?? 'Umum', style: const TextStyle(color: AppConst.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                              child: imgUrl == null
+                                  ? const Center(child: Icon(Icons.inventory_2_rounded, color: AppConst.textSecondary, size: 64))
+                                  : null,
                             ),
-                            const SizedBox(height: 10),
-                            Text(_barang['nama_barang'] ?? '', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppConst.textPrimary)),
-                            const SizedBox(height: 16),
+                            
+                            // Content
+                            Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Kategori badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppConst.primary.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(_barang['nama_kategori'] ?? 'Umum', style: const TextStyle(color: AppConst.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(_barang['nama_barang'] ?? '', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppConst.textPrimary)),
+                                  const SizedBox(height: 16),
 
-                            // Info cards
-                            _infoRow(Icons.inventory_2_outlined, 'Stok Tersedia', '${_barang['stok']} unit'),
-                            _infoRow(Icons.location_on_outlined, 'Lokasi', _barang['lokasi'] ?? '-'),
-                            _infoRow(Icons.build_outlined, 'Kondisi', _barang['kondisi'] ?? '-'),
-                            const SizedBox(height: 24),
+                                  // Info cards
+                                  _infoRow(Icons.inventory_2_outlined, 'Stok Tersedia', '${_barang['stok']} unit'),
+                                  _infoRow(Icons.location_on_outlined, 'Lokasi', _barang['lokasi'] ?? '-'),
+                                  _infoRow(Icons.build_outlined, 'Kondisi', _barang['kondisi'] ?? '-'),
+                                  const SizedBox(height: 24),
 
-                            // Deskripsi
-                            if (_barang['deskripsi'] != null && _barang['deskripsi'] != '') ...[
-                              const Text('Deskripsi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppConst.textPrimary)),
-                              const SizedBox(height: 8),
-                              Text(_barang['deskripsi'], style: const TextStyle(fontSize: 14, color: AppConst.textSecondary, height: 1.5)),
-                              const SizedBox(height: 24),
-                            ],
+                                  // Deskripsi
+                                  if (_barang['deskripsi'] != null && _barang['deskripsi'] != '') ...[
+                                    const Text('Deskripsi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppConst.textPrimary)),
+                                    const SizedBox(height: 8),
+                                    Text(_barang['deskripsi'], style: const TextStyle(fontSize: 14, color: AppConst.textSecondary, height: 1.5)),
+                                    const SizedBox(height: 24),
+                                  ],
+                                  
+                                  // Ketersediaan Alat
+                                  const Text('Jadwal Ketersediaan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppConst.textPrimary)),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: AppConst.border),
+                                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))],
+                                    ),
+                                    padding: const EdgeInsets.all(8),
+                                    child: TableCalendar(
+                                      firstDay: DateTime(2020),
+                                      lastDay: DateTime.now().add(const Duration(days: 365)),
+                                      focusedDay: DateTime.now(),
+                                      availableCalendarFormats: const {CalendarFormat.month: 'Bulan'},
+                                      headerStyle: const HeaderStyle(
+                                        titleCentered: true,
+                                        formatButtonVisible: false,
+                                        titleTextStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                      ),
+                                      calendarStyle: CalendarStyle(
+                                        todayDecoration: BoxDecoration(
+                                          color: _bookedSet.contains(DateFormat('yyyy-MM-dd').format(DateTime.now()))
+                                              ? Colors.deepOrange
+                                              : const Color(0x663B82F6),
+                                          shape: BoxShape.circle,
+                                          border: _bookedSet.contains(DateFormat('yyyy-MM-dd').format(DateTime.now()))
+                                              ? Border.all(color: const Color.fromARGB(255, 57, 136, 226), width: 2.5)
+                                              : null,
+                                        ),
+                                        todayTextStyle: TextStyle(
+                                          color: _bookedSet.contains(DateFormat('yyyy-MM-dd').format(DateTime.now()))
+                                              ? Colors.white
+                                              : AppConst.textPrimary,
+                                        ),
+                                        holidayDecoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
+                                        holidayTextStyle: const TextStyle(color: Colors.white),
+                                      ),
+                                      holidayPredicate: (day) {
+                                        return _bookedSet.contains(DateFormat('yyyy-MM-dd').format(day));
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Container(width: 12, height: 12, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)),
+                                      const SizedBox(width: 8),
+                                      const Text('Jadwal padat (Terdapat peminjaman)', style: TextStyle(fontSize: 12, color: AppConst.textSecondary)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 24),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -114,24 +224,105 @@ class _DetailScreenState extends State<DetailScreen> {
           ? SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: (_barang['stok'] ?? 0) > 0 ? () => _showBookingSheet() : null,
-                    icon: const Icon(Icons.send_rounded, size: 20),
-                    label: Text((_barang['stok'] ?? 0) > 0 ? 'Ajukan Peminjaman' : 'Stok Habis', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppConst.primary,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: AppConst.border,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
+                child: Row(
+                  children: [
+                    // Tombol Ajukan Peminjaman
+                    Expanded(
+                      child: SizedBox(
+                        height: 52,
+                        child: ElevatedButton.icon(
+                          onPressed: (_barang['stok'] ?? 0) > 0 
+                            ? () async {
+                                final res = await Navigator.pushNamed(context, '/book', arguments: {
+                                  'barang': _barang,
+                                  'bookedDates': _bookedDates,
+                                });
+                                if (res == true) {
+                                  if (!mounted) return;
+                                  Navigator.pop(this.context); // Close detail screen
+                                  homeShellKey.currentState?.switchTab(2); // Go to Riwayat
+                                }
+                              } 
+                            : null,
+                          icon: const Icon(Icons.send_rounded, size: 20),
+                          label: Text((_barang['stok'] ?? 0) > 0 ? 'Ajukan Peminjaman' : 'Stok Habis', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppConst.primary,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: AppConst.border,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    // Tombol Tambah ke Keranjang
+                    GestureDetector(
+                      onTap: (_barang['stok'] ?? 0) > 0 ? () => _showAddToCartModal() : null,
+                      child: Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: AppConst.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          Icons.add_shopping_cart,
+                          color: (_barang['stok'] ?? 0) > 0 ? AppConst.primary : AppConst.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             )
           : null,
+    );
+  }
+
+  Widget _appBarIcon(IconData icon, VoidCallback onTap, {int badgeCount = 0}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Center(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
+                ]
+              ),
+              child: Icon(icon, color: AppConst.textPrimary, size: 22),
+            ),
+            if (badgeCount > 0)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: AppConst.error,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    badgeCount > 9 ? '9+' : badgeCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -159,232 +350,159 @@ class _DetailScreenState extends State<DetailScreen> {
     );
   }
 
-  // ─── Booking Bottom Sheet ────────────────────────────────
-  void _showBookingSheet() {
-    DateTime? tPinjam;
-    DateTime? tKembali;
-    int jumlah = 1;
-    final catatanCtrl = TextEditingController();
-    XFile? fileKtm;
-    XFile? fileWajah;
-    bool submitting = false;
 
+
+  void _showAddToCartModal() {
+    final stok = _barang['stok'] ?? 0;
+    if (stok <= 0) return;
+
+    int qty = 1;
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setBS) {
-          Future<void> pickDate(bool isStart) async {
-            final now = DateTime.now();
-            final d = await showDatePicker(
-              context: ctx,
-              initialDate: now.add(const Duration(days: 1)),
-              firstDate: now,
-              lastDate: now.add(const Duration(days: 365)),
-            );
-            if (d == null) return;
-
-            // cek booked
-            final bookedSet = <String>{};
-            for (final bd in _bookedDates) {
-              final s = DateTime.parse(bd['tanggal_pinjam']);
-              final e = DateTime.parse(bd['tanggal_kembali']);
-              for (var dt = s; dt.isBefore(e); dt = dt.add(const Duration(days: 1))) {
-                bookedSet.add(DateFormat('yyyy-MM-dd').format(dt));
-              }
-            }
-            if (bookedSet.contains(DateFormat('yyyy-MM-dd').format(d))) {
-              if (!ctx.mounted) return;
-              ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Tanggal ini sudah dipesan.'), backgroundColor: AppConst.error));
-              return;
-            }
-
-            setBS(() {
-              if (isStart) {
-                tPinjam = d;
-                if (tKembali != null && tKembali!.isBefore(d)) tKembali = null;
-              } else {
-                tKembali = d;
-              }
-            });
-          }
-
-          Future<void> pickFile(bool isKtm) async {
-            final picker = ImagePicker();
-            final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-            if (file != null) setBS(() => isKtm ? fileKtm = file : fileWajah = file);
-          }
-
-          Future<void> submit() async {
-            if (tPinjam == null || tKembali == null) {
-              ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Pilih tanggal pinjam dan kembali.'), backgroundColor: AppConst.error));
-              return;
-            }
-            if (catatanCtrl.text.trim().isEmpty) {
-              ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Catatan wajib diisi.'), backgroundColor: AppConst.error));
-              return;
-            }
-            if (fileKtm == null || fileWajah == null) {
-              ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('KTM dan Foto wajah wajib diunggah.'), backgroundColor: AppConst.error));
-              return;
-            }
-
-            setBS(() => submitting = true);
-            try {
-              final streamed = await ApiService.postMultipart(
-                '/peminjaman',
-                fields: {
-                  'id_barang': '${_barang['id_barang']}',
-                  'jumlah': '$jumlah',
-                  'tanggal_pinjam': DateFormat('yyyy-MM-dd').format(tPinjam!),
-                  'tanggal_kembali': DateFormat('yyyy-MM-dd').format(tKembali!),
-                  'catatan_user': catatanCtrl.text.trim(),
-                },
-                files: {
-                  'bukti_ktm': fileKtm!.path,
-                  'bukti_wajah': fileWajah!.path,
-                },
-                auth: true,
-              );
-              final res = await streamed.stream.bytesToString();
-              final data = jsonDecode(res);
-              if (streamed.statusCode >= 200 && streamed.statusCode < 300) {
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (!ctx.mounted) return;
-                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                  content: Text(data['message'] ?? 'Pengajuan berhasil!'),
-                  backgroundColor: AppConst.success,
-                ));
-              } else {
-                throw Exception(data['message'] ?? 'Gagal mengajukan.');
-              }
-            } catch (e) {
-              if (!ctx.mounted) return;
-              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: AppConst.error));
-            }
-            setBS(() => submitting = false);
-          }
-
-          final fmt = DateFormat('dd MMM yyyy');
-
-          return Container(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+        return StatefulBuilder(
+          builder: (BuildContext ctx, StateSetter setModalState) {
+            return Container(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppConst.border, borderRadius: BorderRadius.circular(2)))),
-                  const SizedBox(height: 16),
-                  const Text('Ajukan Peminjaman', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppConst.textPrimary)),
-                  const SizedBox(height: 20),
-
-                  // Date pickers
-                  Row(
-                    children: [
-                      Expanded(child: _dateBtn('Tgl Pinjam', tPinjam != null ? fmt.format(tPinjam!) : 'Pilih', () => pickDate(true))),
-                      const SizedBox(width: 12),
-                      Expanded(child: _dateBtn('Tgl Kembali', tKembali != null ? fmt.format(tKembali!) : 'Pilih', () => pickDate(false))),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Jumlah
-                  Row(
-                    children: [
-                      const Text('Jumlah:', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(width: 12),
-                      IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: jumlah > 1 ? () => setBS(() => jumlah--) : null),
-                      Text('$jumlah', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                      IconButton(icon: const Icon(Icons.add_circle_outline, color: AppConst.primary), onPressed: () => setBS(() => jumlah++)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Catatan
-                  TextField(
-                    controller: catatanCtrl,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      labelText: 'Catatan / Keperluan',
-                      filled: true,
-                      fillColor: AppConst.bg,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  Center(
+                    child: Container(
+                      width: 50,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  // File uploads
-                  _uploadBtn('📄 KTM', fileKtm?.name, () => pickFile(true)),
-                  const SizedBox(height: 10),
-                  _uploadBtn('📸 Foto Wajah', fileWajah?.name, () => pickFile(false)),
                   const SizedBox(height: 24),
-
+                  Row(
+                    children: [
+                      Container(
+                        width: 70,
+                        height: 70,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: AppConst.bg,
+                          image: (_barang['gambar'] != null && _barang['gambar'] != '')
+                              ? DecorationImage(
+                                  image: NetworkImage('${AppConst.imageBaseUrl}/barang/${_barang['gambar']}'),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: (_barang['gambar'] == null || _barang['gambar'] == '')
+                            ? const Icon(Icons.inventory_2_outlined, color: AppConst.textSecondary)
+                            : null,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _barang['nama_barang'] ?? '',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppConst.textPrimary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Stok Tersedia: $stok Unit',
+                              style: const TextStyle(fontSize: 13, color: AppConst.textSecondary, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  const Text('Atur Jumlah Peminjaman', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppConst.textPrimary)),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          if (qty > 1) setModalState(() => qty--);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: qty > 1 ? AppConst.primary : Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.remove, color: qty > 1 ? AppConst.primary : Colors.grey[400], size: 24),
+                        ),
+                      ),
+                      Text(
+                        '$qty',
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppConst.textPrimary),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          if (qty < stok) setModalState(() => qty++);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: qty < stok ? AppConst.primary : Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.add, color: qty < stok ? AppConst.primary : Colors.grey[400], size: 24),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
                   SizedBox(
+                    width: double.infinity,
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: submitting ? null : submit,
+                      onPressed: () async {
+                        final nav = Navigator.of(ctx);
+                        try {
+                          await context.read<CartProvider>().addItem(_barang, quantity: qty);
+                          nav.pop();
+                          if (!mounted) return;
+                          FlashMessage.show(
+                            context,
+                            'Berhasil menambahkan $qty item ke keranjang',
+                            isSuccess: true,
+                          );
+                        } catch (e) {
+                          nav.pop();
+                          if (!mounted) return;
+                          FlashMessage.show(
+                            context,
+                            e.toString().replaceAll('Exception: ', ''),
+                            isSuccess: false,
+                          );
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppConst.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         elevation: 0,
                       ),
-                      child: submitting
-                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                          : const Text('Kirim Pengajuan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      child: const Text('Masukkan Keranjang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
                     ),
-                  ),
+                  )
                 ],
               ),
-            ),
-          );
-        });
+            );
+          },
+        );
       },
-    );
-  }
-
-  Widget _dateBtn(String label, String value, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        decoration: BoxDecoration(color: AppConst.bg, borderRadius: BorderRadius.circular(12)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(fontSize: 11, color: AppConst.textSecondary)),
-            const SizedBox(height: 4),
-            Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppConst.textPrimary)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _uploadBtn(String label, String? filename, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-        decoration: BoxDecoration(
-          color: AppConst.bg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: filename != null ? AppConst.success : AppConst.border, style: BorderStyle.solid),
-        ),
-        child: Row(
-          children: [
-            Icon(filename != null ? Icons.check_circle : Icons.upload_file, color: filename != null ? AppConst.success : AppConst.textSecondary, size: 20),
-            const SizedBox(width: 10),
-            Expanded(child: Text(filename ?? label, style: TextStyle(fontSize: 14, color: filename != null ? AppConst.textPrimary : AppConst.textSecondary), overflow: TextOverflow.ellipsis)),
-          ],
-        ),
-      ),
     );
   }
 }

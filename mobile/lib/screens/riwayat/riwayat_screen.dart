@@ -4,6 +4,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../core/api_service.dart';
 import '../../core/constants.dart';
+import '../../partials/flash_message.dart';
 
 const _statusCfg = {
   'menunggu':   {'label': 'Menunggu',   'color': 0xFFF59E0B, 'bg': 0xFFFEF3C7},
@@ -37,9 +38,12 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
   Future<void> _fetch() async {
     setState(() => _loading = true);
     try {
-      final res = await ApiService.get('/peminjaman', auth: true);
+      final res = await ApiService.get('/peminjaman/milik-saya', auth: true);
       final json = jsonDecode(res.body);
-      setState(() => _data = json['data'] ?? []);
+      setState(() {
+        _data = json['data'] ?? [];
+        _data.sort((a, b) => (b['id_peminjaman'] ?? 0).compareTo(a['id_peminjaman'] ?? 0));
+      });
     } catch (_) {}
     setState(() => _loading = false);
   }
@@ -97,7 +101,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
-                            (ctx, i) => _itemCard(_filtered[i]),
+                            (ctx, i) => _itemCard(i),
                             childCount: _filtered.length,
                           ),
                         ),
@@ -107,22 +111,75 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
     );
   }
 
-  Widget _itemCard(dynamic p) {
+  Widget _itemCard(int i) {
+    final p = _filtered[i];
     final status = p['status'] ?? 'menunggu';
     final cfg = _statusCfg[status] ?? _statusCfg['menunggu']!;
     final fmtD = DateFormat('dd MMM yyyy');
 
-    return GestureDetector(
-      onTap: () => _showDetail(p),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 3))],
-        ),
-        child: Row(
+    final noPesanan = p['no_pesanan'];
+    final isCart = noPesanan != null && _filtered.where((x) => x['no_pesanan'] == noPesanan).length > 1;
+    final jumlah = p['jumlah'] ?? 1;
+
+    bool isFirst = true;
+    bool isLast = true;
+    if (isCart) {
+      isFirst = i == 0 || _filtered[i - 1]['no_pesanan'] != noPesanan;
+      isLast = i == _filtered.length - 1 || _filtered[i + 1]['no_pesanan'] != noPesanan;
+    }
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (isCart)
+            SizedBox(
+              width: 24,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (!isFirst)
+                    Positioned(
+                      top: 0,
+                      bottom: null,
+                      height: 48,
+                      width: 2.5,
+                      child: Container(color: AppConst.primary.withValues(alpha: 0.5)),
+                    ),
+                  if (!isLast)
+                    Positioned(
+                      top: 48,
+                      bottom: 0,
+                      width: 2.5,
+                      child: Container(color: AppConst.primary.withValues(alpha: 0.5)),
+                    ),
+                  Positioned(
+                    top: 48 - 4,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: AppConst.primary, width: 2.5),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _showDetail(p),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 3))],
+                ),
+                child: Row(
           children: [
             Expanded(
               child: Column(
@@ -130,16 +187,46 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
                 children: [
                   Text(p['nama_barang'] ?? '', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppConst.textPrimary)),
                   const SizedBox(height: 4),
-                  Text('${fmtD.format(DateTime.parse(p['tanggal_pinjam']))} — ${fmtD.format(DateTime.parse(p['tanggal_kembali']))}',
+                  Text('${fmtD.format(DateTime.parse(p['tanggal_pinjam']).toLocal())} — ${fmtD.format(DateTime.parse(p['tanggal_kembali']).toLocal())}',
                       style: const TextStyle(fontSize: 12, color: AppConst.textSecondary)),
                   const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Color(cfg['bg'] as int),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(cfg['label'] as String, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(cfg['color'] as int))),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Color(cfg['bg'] as int),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(cfg['label'] as String, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(cfg['color'] as int))),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppConst.bg,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text('$jumlah Unit', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppConst.textSecondary)),
+                      ),
+                      if (isCart) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.shopping_cart_outlined, size: 12, color: Colors.blue),
+                              SizedBox(width: 4),
+                              Text('Keranjang', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.blue)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -148,15 +235,19 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  ),
+  ],
+  ),
+  );
+}
 
   // ─── Detail Bottom Sheet ─────────────────────────────────
   void _showDetail(dynamic p) {
     final status = p['status'] ?? 'menunggu';
     final cfg = _statusCfg[status] ?? _statusCfg['menunggu']!;
     final fmtD = DateFormat('dd MMM yyyy');
-    final code = 'PMJ-${_genCode(p['id_peminjaman'])}';
+    final code = p['no_pesanan'] != null ? 'PMJ-${p['no_pesanan']}' : 'PMJ-${_genCode(p['id_peminjaman'])}';
 
     showModalBottomSheet(
       context: context,
@@ -210,13 +301,13 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
 
                 // Info rows
                 _detailRow('Jumlah', '${p['jumlah']} unit'),
-                _detailRow('Tgl Pinjam', fmtD.format(DateTime.parse(p['tanggal_pinjam']))),
-                _detailRow('Tgl Kembali', fmtD.format(DateTime.parse(p['tanggal_kembali']))),
+                _detailRow('Tgl Pinjam', fmtD.format(DateTime.parse(p['tanggal_pinjam']).toLocal())),
+                _detailRow('Tgl Kembali', fmtD.format(DateTime.parse(p['tanggal_kembali']).toLocal())),
                 if (p['catatan_user'] != null) _detailRow('Catatan', p['catatan_user']),
                 const SizedBox(height: 16),
 
-                // QR Code (untuk status disetujui/diambil)
-                if (status == 'disetujui' || status == 'diambil') ...[
+                // QR Code (untuk status menunggu/disetujui/diambil)
+                if (status == 'menunggu' || status == 'disetujui' || status == 'diambil') ...[
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
@@ -285,14 +376,14 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
       if (res.statusCode < 300) {
         if (ctx.mounted) Navigator.pop(ctx);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['message'] ?? 'Berhasil dibatalkan.'), backgroundColor: AppConst.success));
+        FlashMessage.show(context, data['message'] ?? 'Berhasil dibatalkan.', isSuccess: true);
         _fetch();
       } else {
         throw Exception(data['message']);
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: AppConst.error));
+      FlashMessage.show(context, e.toString().replaceAll('Exception: ', ''), isSuccess: false);
     }
   }
 

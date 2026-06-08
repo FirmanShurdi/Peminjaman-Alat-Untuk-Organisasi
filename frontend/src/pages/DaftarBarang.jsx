@@ -15,6 +15,7 @@ export default function DaftarBarang() {
   const [activeKategori, setActiveKategori] = useState('Semua');
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState([]);
+  const [qtyModal, setQtyModal] = useState({ show: false, item: null, qty: 1 });
 
   const addToast = (type, message) => {
     const id = Date.now() + Math.random();
@@ -97,15 +98,12 @@ export default function DaftarBarang() {
                 {filteredBarang.map((b, i) => (
                   <div key={b.id_barang || i} className="barang-card">
                     <div className="bc-img-wrap">
-                      <img src={b.gambar ? `/barang/${b.gambar}` : '/intro/step1.png'} alt={b.nama_barang} onError={(e) => e.target.src = '/intro/step1.png'} />
+                      <img src={b.gambar ? `${API}/barang/${b.gambar}` : `${API}/intro/step1.png`} alt={b.nama_barang} onError={(e) => e.target.src = `${API}/intro/step1.png`} />
                       <span className="bc-kondisi">{b.kondisi}</span>
                     </div>
                     <div className="bc-body">
                       <div className="bc-kat">
                         <span>{b.nama_kategori || 'Alat Umum'}</span>
-                        <span className="bc-kat-stars">
-                          {[1,2,3,4,5].map(star => <svg key={star} viewBox="0 0 24 24" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>)}
-                        </span>
                         <span className="bc-kat-badge">Premium</span>
                       </div>
                       <h4 className="bc-nama">{b.nama_barang}</h4>
@@ -118,8 +116,27 @@ export default function DaftarBarang() {
                         {b.lokasi || 'Gudang Utama'}
                       </div>
                     </div>
-                    <div className="bc-foot">
-                      <Link to={`/detail/${b.id_barang}`} className="btn-pinjam-sm">Lihat Detail & Pinjam</Link>
+                    <div className="bc-foot" style={{ display: 'flex', flexDirection: 'row', gap: '10px' }}>
+                      <Link to={`/detail/${b.id_barang}`} className="btn-pinjam-sm" style={{ flex: 1 }}>Lihat Detail & Pinjam</Link>
+                      {user && user.role !== 'admin' && (
+                          <button 
+                              className="btn-add-cart-sm"
+                              title="Tambahkan ke Keranjang"
+                              disabled={b.stok <= 0}
+                              onClick={(e) => {
+                                  e.preventDefault();
+                                  setQtyModal({ show: true, item: b, qty: 1 });
+                              }}
+                          >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: '18px', height: '18px' }}>
+                                  <circle cx="9" cy="21" r="1"></circle>
+                                  <circle cx="20" cy="21" r="1"></circle>
+                                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                  <line x1="11" y1="9" x2="17" y2="9"></line>
+                                  <line x1="14" y1="6" x2="14" y2="12"></line>
+                              </svg>
+                          </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -132,6 +149,52 @@ export default function DaftarBarang() {
           </>
         )}
       </div>
+
+      {/* Modal Kuantitas Keranjang */}
+      {qtyModal.show && qtyModal.item && (
+          <div className="qty-modal-overlay" onClick={() => setQtyModal({ show: false, item: null, qty: 1 })}>
+              <div className="qty-modal-box" onClick={e => e.stopPropagation()}>
+                  <div className="qty-modal-header">
+                      <h3>Masukkan ke Keranjang</h3>
+                      <button onClick={() => setQtyModal({ show: false, item: null, qty: 1 })}>&times;</button>
+                  </div>
+                  <div className="qty-modal-body">
+                      <p>Berapa banyak <strong>{qtyModal.item.nama_barang}</strong> yang ingin dipinjam?</p>
+                      <div className="qty-counter">
+                          <button onClick={() => setQtyModal(p => ({ ...p, qty: Math.max(1, p.qty - 1) }))}>-</button>
+                          <span>{qtyModal.qty}</span>
+                          <button onClick={() => setQtyModal(p => ({ ...p, qty: Math.min(qtyModal.item.stok, p.qty + 1) }))}>+</button>
+                      </div>
+                      <span className="qty-stok">Sisa Stok: {qtyModal.item.stok}</span>
+                  </div>
+                  <div className="qty-modal-footer">
+                      <button 
+                          className="btn-tambah-keranjang"
+                          onClick={() => {
+                              const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+                              const existing = cart.find(x => x.id_barang === qtyModal.item.id_barang);
+                              if(existing) {
+                                  if(existing.jumlah + qtyModal.qty > qtyModal.item.stok) {
+                                      addToast('error', `Stok tidak cukup. Anda sudah ada ${existing.jumlah} di keranjang.`);
+                                      return;
+                                  }
+                                  existing.jumlah += qtyModal.qty;
+                              } else {
+                                  const imgPath = qtyModal.item.gambar ? (qtyModal.item.gambar.startsWith('http') ? qtyModal.item.gambar : `${API}/barang/${qtyModal.item.gambar}`) : null;
+                                  cart.push({ id_barang: qtyModal.item.id_barang, nama_barang: qtyModal.item.nama_barang, gambar: imgPath, jumlah: qtyModal.qty, stok: qtyModal.item.stok });
+                              }
+                              localStorage.setItem('cart', JSON.stringify(cart));
+                              window.dispatchEvent(new Event('cartUpdated'));
+                              addToast('success', `${qtyModal.qty} ${qtyModal.item.nama_barang} masuk keranjang!`);
+                              setQtyModal({ show: false, item: null, qty: 1 });
+                          }}
+                      >
+                          Tambah ke Keranjang
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 }

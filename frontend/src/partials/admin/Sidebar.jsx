@@ -7,7 +7,6 @@ const menuSections = [
     label: 'OVERVIEW',
     items: [
       { name: 'Dashboard', icon: '📊', path: '/dashboard' },
-      { name: 'Analytics', icon: '📈', path: '/analytics' },
     ]
   },
   {
@@ -20,7 +19,6 @@ const menuSections = [
     label: 'PEMINJAMAN',
     items: [
       { name: 'Daftar Pinjam', icon: '📋', path: '/peminjaman' },
-      { name: 'Riwayat', icon: '🕐', path: '/riwayat' },
     ]
   },
   {
@@ -49,11 +47,7 @@ function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar-brand">
         <div className="brand-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-            <path d="M2 17l10 5 10-5"/>
-            <path d="M2 12l10 5 10-5"/>
-          </svg>
+          <img src="http://localhost:3000/intro/logo.png" alt="PinjamIN Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
         </div>
         <div className="brand-text">
           <span className="brand-name">PinjamIN</span>

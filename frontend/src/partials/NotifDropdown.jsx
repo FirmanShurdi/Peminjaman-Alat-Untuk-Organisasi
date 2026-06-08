@@ -91,7 +91,12 @@ export default function NotifDropdown() {
         const pesanLower = (notif.pesan || '').toLowerCase();
         const isRiwayat  = RIWAYAT_KEYWORDS.some(kw => pesanLower.includes(kw));
         if (isRiwayat) {
-            navigate('/riwayat-peminjaman');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (user.role === 'admin') {
+                navigate('/peminjaman');
+            } else {
+                navigate('/riwayat-peminjaman');
+            }
         }
     };
 

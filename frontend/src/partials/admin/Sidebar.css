@@ -26,18 +26,10 @@
 .brand-icon {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #38bdf8, #2563eb);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-}
-
-.brand-icon svg {
-  width: 20px;
-  height: 20px;
-  color: #fff;
 }
 
 .brand-text {

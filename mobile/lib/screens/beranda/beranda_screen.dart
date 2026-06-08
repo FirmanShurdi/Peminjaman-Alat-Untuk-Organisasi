@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/api_service.dart';
 import '../../core/auth_provider.dart';
+import '../../core/cart_provider.dart';
 import '../../core/constants.dart';
-import '../../main.dart';
+import '../../partials/flash_message.dart';
+import '../../partials/app_header.dart';
 
 class BerandaScreen extends StatefulWidget {
   const BerandaScreen({super.key});
@@ -13,13 +16,75 @@ class BerandaScreen extends StatefulWidget {
 }
 
 class _BerandaScreenState extends State<BerandaScreen> {
-  List<dynamic> _barangList = [];
+  List<dynamic> _allBarang = [];
+  List<dynamic> _kategoriList = [];
+  String _selectedKategori = 'Semua';
+  String _searchQuery = '';
   bool _loading = true;
+
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  int _currentTutorialStep = 0;
+  late PageController _tutorialController;
+  Timer? _tutorialTimer;
+  Timer? _notifTimer;
+  int _unreadNotifCount = 0;
+
+  final List<String> _tutorialImages = [
+    '/intro/step1.png',
+    '/intro/step2.png',
+    '/intro/step3.png',
+    '/intro/step4.png',
+  ];
 
   @override
   void initState() {
     super.initState();
     _fetch();
+    _fetchUnread();
+    _tutorialController = PageController(initialPage: 0);
+    _startTutorialTimer();
+    _notifTimer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchUnread());
+  }
+
+  Future<void> _fetchUnread() async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isLoggedIn) return;
+    try {
+      final res = await ApiService.get('/notifikasi/unread-count', auth: true);
+      if (res.statusCode == 200) {
+        final json = jsonDecode(res.body);
+        final count = json['unread'] ?? 0;
+        if (_unreadNotifCount != count && mounted) {
+          setState(() => _unreadNotifCount = count);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _startTutorialTimer() {
+    _tutorialTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (_tutorialController.hasClients) {
+        int nextPage = _currentTutorialStep + 1;
+        if (nextPage >= _tutorialImages.length) {
+          nextPage = 0;
+        }
+        _tutorialController.animateToPage(
+          nextPage,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _tutorialTimer?.cancel();
+    _notifTimer?.cancel();
+    _tutorialController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetch() async {
@@ -27,381 +92,781 @@ class _BerandaScreenState extends State<BerandaScreen> {
     try {
       final resBarang = await ApiService.get('/api/barang');
       final barangData = jsonDecode(resBarang.body);
+
+      final resKat = await ApiService.get('/api/barang/kategori');
+      final katData = jsonDecode(resKat.body);
+
       setState(() {
-        _barangList = (barangData['data'] as List?)?.take(4).toList() ?? [];
+        _allBarang = (barangData['data'] as List?) ?? [];
+        _kategoriList = (katData['data'] as List?) ?? [];
       });
     } catch (_) {}
     setState(() => _loading = false);
   }
 
+  List<dynamic> get _filteredBarang {
+    final list = _allBarang.where((b) {
+      final stok = b['stok'] ?? 0;
+      final matchStok = stok > 0;
+      final matchKat =
+          _selectedKategori == 'Semua' ||
+          (b['nama_kategori'] ?? '').toString().toLowerCase() ==
+              _selectedKategori.toLowerCase();
+      final matchSearch =
+          _searchQuery.isEmpty ||
+          (b['nama_barang'] ?? '').toString().toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          );
+      return matchStok && matchKat && matchSearch;
+    }).toList();
+    return list.take(10).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final cart = context.watch<CartProvider>();
     final user = auth.user;
+    final filtered = _filteredBarang;
 
-    return RefreshIndicator(
-      onRefresh: _fetch,
-      child: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.only(bottom: 0),
-              children: [
-                _buildHeroSection(user),
-                _buildCaraKerjaSection(user),
-                _buildKatalogSection(),
-                _buildLokasiSection(user),
-              ],
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppConst.primary),
+            )
+          : RefreshIndicator(
+              color: AppConst.primary,
+              onRefresh: _fetch,
+              child: CustomScrollView(
+                slivers: [
+                  // ── HEADER & SEARCH BAR ──
+                  SliverToBoxAdapter(
+                    child: AppHeader(
+                      userName: user?['nama'] ?? 'Pengguna',
+                      cartCount: cart.itemCount,
+                      notificationCount: _unreadNotifCount,
+                      onNotificationClosed: _fetchUnread,
+                      searchController: _searchCtrl,
+                      onSearchChanged: (v) => setState(() => _searchQuery = v),
+                    ),
+                  ),
+
+                  // ── TUTORIAL CAROUSEL ──
+                  SliverToBoxAdapter(child: _buildTutorialCarousel()),
+
+                  // ── CATEGORY CHIPS ──
+                  SliverToBoxAdapter(child: _buildCategoryChips()),
+
+                  // ── PRODUCT GRID ──
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    sliver: filtered.isEmpty
+                        ? SliverToBoxAdapter(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 60),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.search_off_rounded,
+                                    size: 64,
+                                    color: Colors.grey.shade300,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Tidak ada barang ditemukan.',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : SliverGrid(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 16,
+                                  crossAxisSpacing: 16,
+                                  childAspectRatio:
+                                      0.56, // Penyesuaian agar tidak terlalu panjang
+                                ),
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) =>
+                                  _buildProductCard(filtered[index]),
+                              childCount: filtered.length,
+                            ),
+                          ),
+                  ),
+                ],
+              ),
             ),
     );
   }
 
-  // ══════ SECTION 1 — HERO ══════
-  Widget _buildHeroSection(Map<String, dynamic>? user) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+  // ══════════════════════════════════════════════
+  //  CATEGORY CHIPS
+  // ══════════════════════════════════════════════
+  Widget _buildCategoryChips() {
+    final allKats = [
+      'Semua',
+      ..._kategoriList.map((k) => k['nama_kategori'].toString()),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SizedBox(
+        height: 42,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          itemCount: allKats.length,
+          separatorBuilder: (context, index) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final kat = allKats[index];
+            final isActive = _selectedKategori == kat;
+
+            return GestureDetector(
+              onTap: () => setState(() {
+                _selectedKategori = kat;
+              }),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: isActive ? AppConst.primary : Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: isActive
+                        ? AppConst.primary
+                        : const Color(0xFFE2E8F0),
+                    width: 1.5,
+                  ),
+                  boxShadow: isActive
+                      ? [
+                          BoxShadow(
+                            color: AppConst.primary.withValues(alpha: 0.25),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Text(
+                  kat,
+                  style: TextStyle(
+                    color: isActive ? Colors.white : AppConst.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ),
+    );
+  }
+
+  // ══════════════════════════════════════════════
+  //  TUTORIAL CAROUSEL
+  // ══════════════════════════════════════════════
+
+  static const List<String> _stepTitles = [
+    'Pilih Barang',
+    'Isi Jadwal Peminjaman',
+    'Upload Dokumen',
+    'Ambil Barang',
+  ];
+
+  static const List<String> _stepDescs = [
+    'Cari dan pilih alat yang ingin kamu pinjam dari katalog.',
+    'Tentukan tanggal pinjam, tanggal kembali, dan jumlah unit.',
+    'Unggah KTM dan foto selfie lalu kirim pengajuan.',
+    'Tunggu persetujuan admin, lalu ambil barang di lokasi.',
+  ];
+
+  Widget _buildTutorialCarousel() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Greeting
-          Text('Halo, ${user?['nama'] ?? 'Pengguna'} 👋', style: const TextStyle(fontSize: 16, color: AppConst.textSecondary, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 24),
-          // Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(color: AppConst.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-            child: const Text('Platform Manajemen Eksklusif', style: TextStyle(color: AppConst.primary, fontSize: 12, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(height: 16),
-          // H1
-          const Text('Infrastruktur\nInventaris\nProfesional', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, height: 1.1, color: AppConst.textPrimary)),
-          const SizedBox(height: 14),
-          const Text('Kelola dan optimalkan peminjaman alat organisasi Anda dengan sistem cerdas yang aman, cepat, dan transparan.', style: TextStyle(fontSize: 14, color: AppConst.textSecondary, height: 1.5)),
-          const SizedBox(height: 28),
-          
-          // Features
-          _heroFeature(Icons.security, 'Keamanan Data', 'Verifikasi multi-lapis'),
-          _heroFeature(Icons.flash_on, 'Akses Instan', 'Persetujuan kilat'),
-          _heroFeature(Icons.inventory_2, 'Katalog Sentral', '100+ alat tersedia'),
-          _heroFeature(Icons.touch_app, 'Sistem Intuitif', 'Booking anti-ribet'),
-          
-          const SizedBox(height: 28),
-          
-          // Buttons
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: () => context.findAncestorStateOfType<HomeShellState>()?.switchTab(1),
-              style: ElevatedButton.styleFrom(backgroundColor: AppConst.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
-              child: const Text('Pinjam Sekarang', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                const Text(
+                  'Cara Peminjaman',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppConst.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppConst.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${_currentTutorialStep + 1}/${_tutorialImages.length}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppConst.primary,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
           SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: OutlinedButton(
-              onPressed: () => context.findAncestorStateOfType<HomeShellState>()?.switchTab(1),
-              style: OutlinedButton.styleFrom(foregroundColor: AppConst.textPrimary, side: const BorderSide(color: AppConst.border, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-              child: const Text('Lihat Katalog', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _heroFeature(IconData icon, String title, String sub) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(color: AppConst.bg, borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: AppConst.primary, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppConst.textPrimary)),
-              const SizedBox(height: 2),
-              Text(sub, style: const TextStyle(fontSize: 13, color: AppConst.textSecondary)),
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  // ══════ SECTION 2 — CARA KERJA ══════
-  Widget _buildCaraKerjaSection(Map<String, dynamic>? user) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-      color: AppConst.bg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppConst.border)),
-            child: const Text('Cara Kerja', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppConst.textSecondary)),
-          ),
-          const SizedBox(height: 14),
-          const Text('Pinjam Alat dalam\n4 Langkah Mudah', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppConst.textPrimary, height: 1.2)),
-          const SizedBox(height: 10),
-          const Text('Proses sederhana untuk meminjam alat organisasi dari awal hingga selesai.', style: TextStyle(fontSize: 14, color: AppConst.textSecondary, height: 1.5)),
-          const SizedBox(height: 32),
-          
-          _stepCard('1', Icons.search, 'Pilih Alat', 'Jelajahi katalog dan pilih alat yang kamu butuhkan untuk kegiatanmu.'),
-          _stepCard('2', Icons.calendar_today, 'Pilih Tanggal', 'Tentukan tanggal pinjam dan kembali sesuai kebutuhan kegiatan.'),
-          _stepCard('3', Icons.edit_document, 'Isi Data', 'Lengkapi data peminjam dan keperluan peminjaman dengan benar.'),
-          _stepCard('4', Icons.check_circle_outline, 'Konfirmasi & Pinjam', 'Konfirmasi peminjaman, ambil alat, dan gunakan dengan bertanggung jawab.'),
-          
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppConst.border)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Butuh Bantuan?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppConst.textPrimary)),
-                const SizedBox(height: 6),
-                const Text('Tim kami siap membantu proses peminjamanmu.', style: TextStyle(fontSize: 13, color: AppConst.textSecondary)),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    onPressed: () {}, // Trigger WA in real app
-                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                    label: const Text('Hubungi Kami', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    style: ElevatedButton.styleFrom(backgroundColor: AppConst.primary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            height: 320, // Format potret
+            child: PageView.builder(
+              controller: _tutorialController,
+              onPageChanged: (idx) =>
+                  setState(() => _currentTutorialStep = idx),
+              itemCount: _tutorialImages.length,
+              itemBuilder: (context, index) {
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppConst.primaryDark.withValues(alpha: 0.15),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
-                )
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // ── Gambar dengan zoom pada step1 ──
+                        index == 0
+                            ? _buildZoomableStep1()
+                            : Image.network(
+                                '${AppConst.imageBaseUrl}${_tutorialImages[index]}',
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Container(
+                                  color: const Color(0xFFF1F5F9),
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.image_not_supported_outlined,
+                                      color: Color(0xFFCBD5E1),
+                                      size: 40,
+                                    ),
+                                  ),
+                                ),
+                              ),
 
-  Widget _stepCard(String num, IconData icon, String title, String desc) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36, height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: AppConst.primary.withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: Text(num, style: const TextStyle(color: AppConst.primary, fontWeight: FontWeight.w900, fontSize: 16)),
+                        // ── Gradient overlay di bawah ──
+                        Positioned(
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          height: 120,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withValues(alpha: 0.7),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // ── Label step di bawah ──
+                        Positioned(
+                          bottom: 16,
+                          left: 16,
+                          right: 16,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppConst.primary,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  'Step ${index + 1}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _stepTitles[index],
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _stepDescs[index],
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  fontSize: 11,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(icon, size: 18, color: AppConst.textPrimary),
-                    const SizedBox(width: 8),
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppConst.textPrimary)),
-                  ],
+          const SizedBox(height: 16),
+          // ── Dot indicators ──
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(_tutorialImages.length, (index) {
+              final isActive = _currentTutorialStep == index;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                height: 6,
+                width: isActive ? 24 : 6,
+                decoration: BoxDecoration(
+                  color: isActive ? AppConst.primary : const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(3),
                 ),
-                const SizedBox(height: 8),
-                Text(desc, style: const TextStyle(fontSize: 13, color: AppConst.textSecondary, height: 1.5)),
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-
-  // ══════ SECTION 3 — KATALOG ══════
-  Widget _buildKatalogSection() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: AppConst.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppConst.border)),
-            child: const Text('Koleksi Inventaris', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppConst.textSecondary)),
+              );
+            }),
           ),
-          const SizedBox(height: 14),
-          const Text('Alat Operasional\nUnggulan', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppConst.textPrimary, height: 1.2)),
-          const SizedBox(height: 10),
-          const Text('Daftar inventaris premium dengan tingkat ketersediaan tinggi untuk mendukung kegiatan Anda.', style: TextStyle(fontSize: 14, color: AppConst.textSecondary, height: 1.5)),
-          const SizedBox(height: 32),
-          
-          ..._barangList.map((b) => _buildKatalogCard(b)),
-          
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: OutlinedButton(
-              onPressed: () => context.findAncestorStateOfType<HomeShellState>()?.switchTab(1),
-              style: OutlinedButton.styleFrom(foregroundColor: AppConst.textPrimary, side: const BorderSide(color: AppConst.border, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-              child: const Text('Lihat Semua Katalog', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-            ),
-          )
         ],
       ),
     );
   }
 
-  Widget _buildKatalogCard(dynamic b) {
+  /// Step 1: Gambar landscape yang otomatis zoom ke card barang pertama
+  Widget _buildZoomableStep1() {
+    // Animasi zoom yang berjalan terus (pan & zoom ke card pertama)
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 1.0, end: 2.2),
+      duration: const Duration(seconds: 4),
+      curve: Curves.easeInOut,
+      builder: (context, scaleVal, child) {
+        return Transform(
+          alignment: const Alignment(
+            -0.85,
+            0.3,
+          ), // Fokus ke card kiri (barang pertama)
+          transform: Matrix4.diagonal3Values(scaleVal, scaleVal, 1.0),
+          child: child,
+        );
+      },
+      child: Image.network(
+        '${AppConst.imageBaseUrl}${_tutorialImages[0]}',
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => Container(
+          color: const Color(0xFFF1F5F9),
+          child: const Center(
+            child: Icon(
+              Icons.image_not_supported_outlined,
+              color: Color(0xFFCBD5E1),
+              size: 40,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════
+  //  PRODUCT CARD (Grid item)
+  // ══════════════════════════════════════════════
+  Widget _buildProductCard(dynamic b) {
     final imgUrl = (b['gambar'] != null && b['gambar'] != '')
-        ? '${AppConst.baseUrl}/barang/${b['gambar']}'
+        ? '${AppConst.imageBaseUrl}/barang/${b['gambar']}'
         : null;
+    final stok = b['stok'] ?? 0;
+    final isAvailable = stok > 0;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppConst.border),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Image
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: SizedBox(
-              height: 160,
-              width: double.infinity,
-              child: imgUrl != null
-                  ? Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (_, _, _) => _placeholderImg())
-                  : _placeholderImg(),
+    return GestureDetector(
+      onTap: () =>
+          Navigator.pushNamed(context, '/detail', arguments: b['id_barang']),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: AppConst.primaryDark.withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
             ),
-          ),
-          // Body
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(b['nama_kategori'] ?? 'Alat Umum', style: const TextStyle(fontSize: 12, color: AppConst.primary, fontWeight: FontWeight.w800)),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(6)),
-                      child: const Text('Premium', style: TextStyle(fontSize: 10, color: Color(0xFFD97706), fontWeight: FontWeight.w800)),
-                    )
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(b['nama_barang'] ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppConst.textPrimary)),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    const Icon(Icons.inventory_2_outlined, size: 18, color: AppConst.textSecondary),
-                    const SizedBox(width: 8),
-                    const Text('Sisa Stok: ', style: TextStyle(fontSize: 14, color: AppConst.textSecondary)),
-                    Text('${b['stok']} Unit', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppConst.textPrimary)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.location_on_outlined, size: 18, color: AppConst.textSecondary),
-                    const SizedBox(width: 8),
-                    Text(b['lokasi'] ?? 'Gudang Utama', style: const TextStyle(fontSize: 14, color: AppConst.textSecondary)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pushNamed(context, '/detail', arguments: b['id_barang']),
-                    style: ElevatedButton.styleFrom(backgroundColor: AppConst.bg, foregroundColor: AppConst.primary, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                    child: const Text('Lihat Detail & Pinjam', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── IMAGE ──
+            AspectRatio(
+              aspectRatio: 1.15,
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: double.infinity,
+                      child: imgUrl != null
+                          ? Image.network(
+                              imgUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _placeholderImg(),
+                            )
+                          : _placeholderImg(),
+                    ),
                   ),
-                )
-              ],
+                  // Availability badge
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isAvailable
+                            ? AppConst.success.withValues(alpha: 0.9)
+                            : AppConst.error.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        isAvailable ? 'Tersedia' : 'Habis',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          )
-        ],
+
+            // ── INFO ──
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Name
+                    Text(
+                      b['nama_barang'] ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppConst.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // Category
+                    Text(
+                      b['nama_kategori'] ?? 'Umum',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppConst.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Description
+                    Expanded(
+                      child: Text(
+                        b['deskripsi'] ??
+                            'Tidak ada deskripsi untuk barang ini.',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppConst.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    // Bottom row: stock + add button
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.inventory_2_outlined,
+                          size: 14,
+                          color: AppConst.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Stok: $stok',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppConst.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Spacer(),
+                        // Add / Detail button
+                        GestureDetector(
+                          onTap: isAvailable
+                              ? () => _showAddToCartModal(context, b)
+                              : null,
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              gradient: isAvailable
+                                  ? const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xFF60A5FA),
+                                        AppConst.primaryDark,
+                                      ],
+                                    )
+                                  : LinearGradient(
+                                      colors: [
+                                        Colors.grey.shade300,
+                                        Colors.grey.shade400,
+                                      ],
+                                    ),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: isAvailable
+                                  ? [
+                                      BoxShadow(
+                                        color: AppConst.primary.withValues(
+                                          alpha: 0.4,
+                                        ),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ]
+                                  : [],
+                            ),
+                            child: const Icon(
+                              Icons.add_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  void _showAddToCartModal(BuildContext context, dynamic b) {
+    final stok = b['stok'] ?? 0;
+    if (stok <= 0) return;
+
+    int qty = 1;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (BuildContext ctx, StateSetter setModalState) {
+            return Container(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 50,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Container(
+                        width: 70,
+                        height: 70,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: AppConst.bg,
+                          image: (b['gambar'] != null && b['gambar'] != '')
+                              ? DecorationImage(
+                                  image: NetworkImage('${AppConst.imageBaseUrl}/barang/${b['gambar']}'),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: (b['gambar'] == null || b['gambar'] == '')
+                            ? const Icon(Icons.inventory_2_outlined, color: AppConst.textSecondary)
+                            : null,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              b['nama_barang'] ?? '',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppConst.textPrimary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Stok Tersedia: $stok Unit',
+                              style: const TextStyle(fontSize: 13, color: AppConst.textSecondary, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  const Text('Atur Jumlah Peminjaman', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppConst.textPrimary)),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          if (qty > 1) setModalState(() => qty--);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: qty > 1 ? AppConst.primary : Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.remove, color: qty > 1 ? AppConst.primary : Colors.grey[400], size: 24),
+                        ),
+                      ),
+                      Text(
+                        '$qty',
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppConst.textPrimary),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          if (qty < stok) setModalState(() => qty++);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: qty < stok ? AppConst.primary : Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.add, color: qty < stok ? AppConst.primary : Colors.grey[400], size: 24),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        try {
+                          await context.read<CartProvider>().addItem(b, quantity: qty);
+                          if (!context.mounted) return;
+                          Navigator.pop(ctx);
+                          FlashMessage.show(
+                            context,
+                            'Berhasil menambahkan $qty item ke keranjang',
+                            isSuccess: true,
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          Navigator.pop(ctx);
+                          FlashMessage.show(
+                            context,
+                            e.toString().replaceAll('Exception: ', ''),
+                            isSuccess: false,
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppConst.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      child: const Text('Masukkan Keranjang', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
+                  )
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
   Widget _placeholderImg() => Container(
-    color: AppConst.bg,
-    child: const Center(child: Icon(Icons.inventory_2_outlined, color: AppConst.textSecondary, size: 40)),
-  );
-
-  // ══════ SECTION 4 — LOKASI ══════
-  Widget _buildLokasiSection(Map<String, dynamic>? user) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 40, 20, 100),
-      color: AppConst.bg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Kunjungi Pusat\nGudang Kami', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppConst.textPrimary, height: 1.2)),
-          const SizedBox(height: 10),
-          const Text('Pengambilan dan pengembalian barang dilakukan di gudang utama Politeknik Elektronika Negeri Surabaya.', style: TextStyle(fontSize: 14, color: AppConst.textSecondary, height: 1.5)),
-          const SizedBox(height: 32),
-          
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppConst.border)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Jam Operasional', style: TextStyle(fontSize: 12, color: AppConst.textSecondary, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 6),
-                const Text('Senin - Jumat, 08:00 - 16:00 WIB', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppConst.textPrimary)),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Divider(height: 1, color: AppConst.border),
-                ),
-                const Text('Titik Pengambilan / Pengembalian', style: TextStyle(fontSize: 12, color: AppConst.textSecondary, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 6),
-                const Text('Gudang Utama PENS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppConst.textPrimary)),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.support_agent, size: 20),
-                    label: const Text('Hubungi Admin', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                    style: OutlinedButton.styleFrom(foregroundColor: AppConst.textPrimary, side: const BorderSide(color: AppConst.border, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  ),
-                )
-              ],
-            ),
-          ),
-          const SizedBox(height: 40),
-          Center(
-            child: Text('© ${DateTime.now().year} PinjamIN — Sistem Peminjaman Alat', style: const TextStyle(fontSize: 12, color: AppConst.textSecondary)),
-          )
-        ],
+    color: const Color(0xFFF1F5F9),
+    child: const Center(
+      child: Icon(
+        Icons.inventory_2_outlined,
+        color: Color(0xFFCBD5E1),
+        size: 36,
       ),
-    );
-  }
+    ),
+  );
 }

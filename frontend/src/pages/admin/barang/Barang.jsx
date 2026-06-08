@@ -266,7 +266,7 @@ export default function Barang() {
                         <td>ID: {item.id_barang}</td>
                         <td>
                           {item.gambar ? (
-                            <img src={item.gambar} alt={item.nama_barang} className="barang-img" />
+                            <img src={item.gambar.startsWith('http') ? item.gambar : `http://localhost:3000/barang/${item.gambar}`} alt={item.nama_barang} className="barang-img" />
                           ) : (
                             <div className="barang-img" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'10px',color:'#94a3b8'}}>No Img</div>
                           )}

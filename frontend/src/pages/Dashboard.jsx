@@ -3,11 +3,12 @@ import Sidebar from '../partials/admin/Sidebar';
 import Flash from '../partials/Flash';
 import AdminNavbar from '../partials/admin/AdminNavbar';
 import { useTheme } from '../App';
+import { authFetch } from '../utils/authFetch';
 import './Dashboard.css';
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const CHART_DATA = [8,12,10,18,24,22,28,34,30,38,42,48];
-const MAX_VAL = 50;
+const API = 'http://localhost:3000';
+
+const WEEKS = ['Mg 1', 'Mg 2', 'Mg 3', 'Mg 4', 'Mg 5'];
 
 function MiniSparkline({ data, color }) {
   const points = data.map((v, i) => {
@@ -118,6 +119,20 @@ function Dashboard() {
   const [chartTab, setChartTab] = useState('Peminjaman');
   const { dark, toggleTheme } = useTheme();
   const [toasts, setToasts] = useState([]);
+  const [stats, setStats] = useState({
+     totalBarang: '-',
+     totalAnggota: '-',
+     totalPeminjaman: '-',
+     barangDipinjam: '-',
+     recentOrders: [],
+     chartPeminjaman: [0, 0, 0, 0, 0],
+     chartPengembalian: [0, 0, 0, 0, 0],
+     goals: {
+        peminjaman: { value: 0, target: 50, percent: 0 },
+        anggota: { value: 0, target: 100, percent: 0 },
+        barang: { value: 0, target: 200, percent: 0 }
+     }
+  });
 
   const addToast = (type, message) => {
     const id = Date.now() + Math.random();
@@ -140,11 +155,82 @@ function Dashboard() {
   }, []);
 
   useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [resStat, resPem] = await Promise.all([
+          authFetch(`${API}/api/beranda/statistik`),
+          authFetch(`${API}/api/peminjaman`)
+        ]);
+
+        const [jStat, jPem] = await Promise.all([
+          resStat.json(), resPem.json()
+        ]);
+
+        const dataStat = jStat.data || {};
+        const dataPem = jPem.data || [];
+
+        const recentOrders = dataPem.slice(0, 5).map(p => {
+            const genCode = (id) => ((id * 2654435761) >>> 0).toString(16).substring(0, 6).toUpperCase().padStart(6, '0');
+            return {
+                id: `PMJ-${genCode(p.id_peminjaman)}`,
+                customer: p.nama_user,
+                product: p.nama_barang,
+                status: p.status.charAt(0).toUpperCase() + p.status.slice(1),
+                amount: p.jumlah + ' Unit'
+            }
+        });
+
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        const getWeek = (d) => Math.min(Math.floor((d.getDate() - 1) / 7), 4);
+
+        const chartPeminjaman = [0, 0, 0, 0, 0];
+        const chartPengembalian = [0, 0, 0, 0, 0];
+        let selesaiCount = 0;
+
+        dataPem.forEach(p => {
+           const d = new Date(p.tanggal_pinjam || p.created_at);
+           if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+               const w = getWeek(d);
+               chartPeminjaman[w]++;
+               if (p.status === 'selesai' || p.status === 'dikembalikan') {
+                   chartPengembalian[w]++;
+               }
+           }
+           if (p.status === 'selesai') selesaiCount++;
+        });
+
+        const totalBrg = dataStat.total_barang || 0;
+        const totalAgt = dataStat.total_anggota || 0;
+        const goals = {
+          peminjaman: { value: selesaiCount, target: 50, percent: Math.min(Math.round((selesaiCount / 50) * 100), 100) },
+          anggota: { value: totalAgt, target: 100, percent: Math.min(Math.round((totalAgt / 100) * 100), 100) },
+          barang: { value: totalBrg, target: 200, percent: Math.min(Math.round((totalBrg / 200) * 100), 100) }
+        };
+
+        setStats({
+           totalBarang: totalBrg,
+           totalAnggota: totalAgt,
+           totalPeminjaman: dataPem.length,
+           barangDipinjam: dataStat.dipinjam || 0,
+           recentOrders,
+           chartPeminjaman,
+           chartPengembalian,
+           goals
+        });
+      } catch(e) {
+          console.error(e);
+      }
+    };
+    fetchDashboardData();
+  }, []);
+
+  useEffect(() => {
     drawChart();
     const handleResize = () => drawChart();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [chartTab, dark]);
+  }, [chartTab, dark, stats.chartPeminjaman, stats.chartPengembalian]);
 
   function drawChart() {
     const canvas = canvasRef.current;
@@ -170,6 +256,10 @@ function Dashboard() {
     const gridColor = isDark ? '#2a2d3a' : '#f1f5f9';
     const labelColor = isDark ? '#64748b' : '#94a3b8';
 
+    const activeData = chartTab === 'Pengembalian' ? stats.chartPengembalian : stats.chartPeminjaman;
+    const maxValFound = Math.max(...activeData, 5);
+    const MAX_VAL = Math.ceil(maxValFound * 1.5);
+
     ctx.font = '11px Inter, sans-serif';
     ctx.fillStyle = labelColor;
     ctx.textAlign = 'right';
@@ -186,14 +276,14 @@ function Dashboard() {
     }
 
     ctx.textAlign = 'center';
-    MONTHS.forEach((m, i) => {
-      const x = padL + (chartW / (MONTHS.length - 1)) * i;
+    WEEKS.forEach((m, i) => {
+      const x = padL + (chartW / (WEEKS.length - 1)) * i;
       ctx.fillStyle = labelColor;
       ctx.fillText(m, x, H - 10);
     });
 
-    const pts = CHART_DATA.map((v, i) => ({
-      x: padL + (chartW / (CHART_DATA.length - 1)) * i,
+    const pts = activeData.map((v, i) => ({
+      x: padL + (chartW / (activeData.length - 1)) * i,
       y: padT + chartH - (v / MAX_VAL) * chartH
     }));
 
@@ -247,22 +337,6 @@ function Dashboard() {
     { label: 'Social', value: 15, color: '#f97316' },
   ];
 
-  const recentOrders = [
-    { customer: 'Ahmad R.', id: 'PMJ-001', product: 'Proyektor Epson', status: 'Disetujui', amount: '1 Unit' },
-    { customer: 'Siti N.', id: 'PMJ-002', product: 'Laptop Asus', status: 'Menunggu', amount: '2 Unit' },
-    { customer: 'Budi S.', id: 'PMJ-003', product: 'Speaker JBL', status: 'Diambil', amount: '1 Unit' },
-    { customer: 'Dewi A.', id: 'PMJ-004', product: 'Kamera Canon', status: 'Selesai', amount: '1 Unit' },
-    { customer: 'Firman H.', id: 'PMJ-005', product: 'Mikrofon Shure', status: 'Ditolak', amount: '3 Unit' },
-  ];
-
-  const recentActivities = [
-    { icon: '📦', text: 'Proyektor Epson ditambahkan ke inventaris', time: '2 menit lalu' },
-    { icon: '✅', text: 'Peminjaman PMJ-001 disetujui', time: '15 menit lalu' },
-    { icon: '👤', text: 'User baru "Siti N." terdaftar', time: '1 jam lalu' },
-    { icon: '🔄', text: 'Laptop Asus dikembalikan', time: '3 jam lalu' },
-    { icon: '⚠️', text: 'Speaker JBL mendekati batas waktu', time: '5 jam lalu' },
-  ];
-
   const statusClass = (s) => {
     const map = { 'Disetujui': 'approved', 'Menunggu': 'pending', 'Diambil': 'taken', 'Selesai': 'done', 'Ditolak': 'rejected' };
     return map[s] || '';
@@ -282,7 +356,7 @@ function Dashboard() {
           <div className="stats-row">
             <StatCard
               title="Total Barang"
-              value="148"
+              value={stats.totalBarang}
               change="+12.5% vs bulan lalu"
               positive={true}
               icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>}
@@ -291,7 +365,7 @@ function Dashboard() {
             />
             <StatCard
               title="Total Anggota"
-              value="2,847"
+              value={stats.totalAnggota}
               change="+8.2% vs bulan lalu"
               positive={true}
               icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>}
@@ -300,7 +374,7 @@ function Dashboard() {
             />
             <StatCard
               title="Total Peminjaman"
-              value="1,432"
+              value={stats.totalPeminjaman}
               change="-3.1% vs bulan lalu"
               positive={false}
               icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>}
@@ -309,7 +383,7 @@ function Dashboard() {
             />
             <StatCard
               title="Barang Dipinjam"
-              value="284"
+              value={stats.barangDipinjam}
               change="+24.7% vs bulan lalu"
               positive={true}
               icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
@@ -363,9 +437,9 @@ function Dashboard() {
               <div className="goals-card">
                 <h3 className="card-title">Monthly Goals</h3>
                 <p className="card-sub">Progres menuju target</p>
-                <ProgressBar label="Peminjaman Selesai" value="48" target="60" percent={80} color="#3b82f6" />
-                <ProgressBar label="Anggota Baru" value="847" target="1,000" percent={85} color="#06b6d4" />
-                <ProgressBar label="Pengembalian Tepat" value="3.8" target="5" percent={76} color="#f59e0b" />
+                <ProgressBar label="Peminjaman Selesai" value={stats.goals.peminjaman.value} target={stats.goals.peminjaman.target} percent={stats.goals.peminjaman.percent} color="#3b82f6" />
+                <ProgressBar label="Pertumbuhan Anggota" value={stats.goals.anggota.value} target={stats.goals.anggota.target} percent={stats.goals.anggota.percent} color="#06b6d4" />
+                <ProgressBar label="Ketersediaan Barang" value={stats.goals.barang.value} target={stats.goals.barang.target} percent={stats.goals.barang.percent} color="#f59e0b" />
               </div>
             </div>
           </div>
@@ -390,7 +464,7 @@ function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentOrders.map(o => (
+                  {stats.recentOrders.length > 0 ? stats.recentOrders.map(o => (
                     <tr key={o.id}>
                       <td className="customer-cell">{o.customer}</td>
                       <td className="order-id">{o.id}</td>
@@ -398,30 +472,9 @@ function Dashboard() {
                       <td><span className={`status-badge ${statusClass(o.status)}`}>{o.status}</span></td>
                       <td>{o.amount}</td>
                     </tr>
-                  ))}
+                  )) : <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>Belum ada peminjaman</td></tr>}
                 </tbody>
               </table>
-            </div>
-
-            <div className="activity-card">
-              <div className="card-header-row">
-                <div>
-                  <h3 className="card-title">Recent Activity</h3>
-                  <p className="card-sub">Kejadian terbaru di sistem</p>
-                </div>
-                <a href="#" className="view-all">View all →</a>
-              </div>
-              <div className="activity-list">
-                {recentActivities.map((a, i) => (
-                  <div key={i} className="activity-item">
-                    <span className="activity-icon">{a.icon}</span>
-                    <div className="activity-content">
-                      <span className="activity-text">{a.text}</span>
-                      <span className="activity-time">{a.time}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         </div>

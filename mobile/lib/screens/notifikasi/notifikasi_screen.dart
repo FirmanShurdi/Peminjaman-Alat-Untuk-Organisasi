@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../core/api_service.dart';
 import '../../core/constants.dart';
+import '../../main.dart';
 
 class NotifikasiScreen extends StatefulWidget {
   const NotifikasiScreen({super.key});
@@ -45,32 +46,73 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final unread = _data.where((n) => n['dibaca'] == 0 || n['dibaca'] == false).length;
+    final unread = _data.where((n) => n['dibaca_at'] == null).length;
 
-    return RefreshIndicator(
-      onRefresh: _fetch,
-      child: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Notifikasi', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppConst.textPrimary)),
-                              Text('$unread belum dibaca', style: const TextStyle(color: AppConst.textSecondary, fontSize: 14)),
-                            ],
-                          ),
-                        ),
-                        if (unread > 0)
-                          TextButton(
-                            onPressed: _markAllRead,
-                            child: const Text('Baca Semua', style: TextStyle(color: AppConst.primary, fontWeight: FontWeight.w600)),
+    return Scaffold(
+      backgroundColor: AppConst.bg,
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _fetch,
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () => Navigator.pop(context),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                margin: const EdgeInsets.only(right: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.05),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppConst.textPrimary),
+                              ),
+                            ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Notifikasi', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppConst.textPrimary)),
+                                  Text('$unread belum dibaca', style: const TextStyle(color: AppConst.textSecondary, fontSize: 14)),
+                                ],
+                              ),
+                            ),
+                          GestureDetector(
+                            onTap: _markAllRead,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: AppConst.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.done_all_rounded, size: 16, color: AppConst.primary),
+                                  const SizedBox(width: 6),
+                                  const Text(
+                                    'Baca Semua',
+                                    style: TextStyle(
+                                      color: AppConst.primary,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                       ],
                     ),
@@ -88,18 +130,23 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
                           ),
                         ),
                       ),
-              ],
-            ),
+                  ],
+                ),
+        ),
+      ),
     );
   }
 
   Widget _notifTile(dynamic n) {
-    final dibaca = n['dibaca'] == 1 || n['dibaca'] == true;
+    final dibaca = n['dibaca_at'] != null;
     final waktu = n['created_at'] != null ? _timeAgo(DateTime.parse(n['created_at'])) : '';
 
     return GestureDetector(
-      onTap: () {
-        if (!dibaca) _markRead(n['id_notifikasi']);
+      onTap: () async {
+        if (!dibaca) await _markRead(n['id_notifikasi']);
+        if (!mounted) return;
+        Navigator.pop(context);
+        homeShellKey.currentState?.switchTab(2);
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),

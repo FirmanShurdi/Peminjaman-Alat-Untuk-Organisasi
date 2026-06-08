@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth_provider.dart';
 import '../../core/constants.dart';
+import '../../partials/flash_message.dart';
 
 // ─────────────────────────────────────────────
 //  PinjamIN Theme Colors (match website)
@@ -40,6 +41,7 @@ class _LoginScreenState extends State<LoginScreen>
   final _regEmail = TextEditingController();
   final _regPass = TextEditingController();
   final _regConfirmPass = TextEditingController();
+  final _regMfa = TextEditingController();
 
   bool _siPassVisible = false;
   bool _suPassVisible = false;
@@ -59,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen>
       curve: Curves.easeInOutCubic,
     );
 
-    _headerHeight = Tween<double>(begin: 320.0, end: 220.0).animate(
+    _headerHeight = Tween<double>(begin: 210.0, end: 150.0).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutCubic),
     );
 
@@ -87,6 +89,7 @@ class _LoginScreenState extends State<LoginScreen>
     _regEmail.dispose();
     _regPass.dispose();
     _regConfirmPass.dispose();
+    _regMfa.dispose();
     super.dispose();
   }
 
@@ -101,12 +104,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   // ── Snackbar Helper ───────────────────────
   void _snack(String msg, {bool error = true}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: error ? AppConst.error : AppConst.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+    FlashMessage.show(context, msg, isSuccess: !error);
   }
 
   // ── Auth Actions ──────────────────────────
@@ -115,18 +113,40 @@ class _LoginScreenState extends State<LoginScreen>
       _snack('Email dan password wajib diisi.');
       return;
     }
+    
+    if (!_loginEmail.text.trim().endsWith('@kampus.ac.id') && _loginEmail.text.trim() != 'admin') {
+      _snack('Gunakan email kampus (@kampus.ac.id) untuk login.');
+      return;
+    }
     final auth = context.read<AuthProvider>();
     final err = await auth.login(_loginEmail.text.trim(), _loginPass.text);
     if (err != null) {
       _snack(err);
     } else {
-      if (mounted) Navigator.pushReplacementNamed(context, '/home');
+      if (mounted) {
+        FocusScope.of(context).unfocus(); // Tutup keyboard agar snackbar tidak error 'off screen'
+        final nama = auth.user?['nama'] ?? 'Pengguna';
+        FlashMessage.show(
+          context,
+          'Selamat datang, $nama!',
+          isSuccess: true,
+        );
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      }
     }
   }
 
   Future<void> _doRegister() async {
-    if (_regNim.text.isEmpty || _regName.text.isEmpty || _regEmail.text.isEmpty || _regPass.text.isEmpty) {
+    if (_regNim.text.isEmpty || _regName.text.isEmpty || _regEmail.text.isEmpty || _regPass.text.isEmpty || _regMfa.text.isEmpty) {
       _snack('Semua field wajib diisi.');
+      return;
+    }
+    if (!RegExp(r'^\d+$').hasMatch(_regNim.text.trim())) {
+      _snack('NIM wajib diisi angka saja tanpa spasi, huruf, atau simbol.');
+      return;
+    }
+    if (!_regEmail.text.trim().endsWith('@kampus.ac.id')) {
+      _snack('Pendaftaran wajib menggunakan email kampus (@kampus.ac.id).');
       return;
     }
     if (_regPass.text != _regConfirmPass.text) {
@@ -139,6 +159,7 @@ class _LoginScreenState extends State<LoginScreen>
       _regName.text.trim(),
       _regEmail.text.trim(),
       _regPass.text,
+      _regMfa.text.trim(),
     );
     if (err != null) {
       _snack(err);
@@ -153,7 +174,6 @@ class _LoginScreenState extends State<LoginScreen>
   // ─────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final screenH = MediaQuery.of(context).size.height;
     final topPad = MediaQuery.of(context).padding.top;
     final auth = context.watch<AuthProvider>();
 
@@ -230,10 +250,17 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                   ],
                                 ),
-                                child: const Icon(
-                                  Icons.inventory_2_rounded,
-                                  color: Colors.white,
-                                  size: 44,
+                                child: Center(
+                                  child: Image.network(
+                                    '${AppConst.imageBaseUrl}/intro/logo.png',
+                                    width: 50,
+                                    height: 50,
+                                    errorBuilder: (context, error, stackTrace) => const Icon(
+                                      Icons.inventory_2_rounded,
+                                      color: Colors.white,
+                                      size: 44,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -256,7 +283,7 @@ class _LoginScreenState extends State<LoginScreen>
                       alignment: Alignment.topCenter,
                       children: <Widget>[
                         ...previousChildren,
-                        if (currentChild != null) currentChild,
+                        ?currentChild,
                       ],
                     );
                   },
@@ -296,6 +323,7 @@ class _LoginScreenState extends State<LoginScreen>
                           emailCtrl: _regEmail,
                           passCtrl: _regPass,
                           confirmPassCtrl: _regConfirmPass,
+                          mfaCtrl: _regMfa,
                           passVisible: _suPassVisible,
                           confirmPassVisible: _confirmPassVisible,
                           loading: auth.loading,
@@ -306,7 +334,7 @@ class _LoginScreenState extends State<LoginScreen>
                           onToggle: _toggle,
                           onSubmit: _doRegister,
                         ),
-            // (End of AnimatedSwitcher)
+                ), // <-- Menutup AnimatedSwitcher
           ],
         ),
       ),
@@ -329,34 +357,34 @@ class _WaveClipper extends CustomClipper<Path> {
     final w = s.width;
     final path = Path()..moveTo(0, 0);
 
-    // Sign In (0.0): simple convex arc (simetris)
-    // Sign Up (1.0): deep dip on left, rise on right (menarik ke bawah di kiri)
+    // Sign In (0.0): Menyapu dari kiri bawah (h=1.0) membelah logo di tengah (h=0.7) ke atas kanan (h=0.4)
+    // Sign Up (1.0): Tertarik ke bawah di kiri, lalu naik di kanan
     
     final p1 = Offset(
-      w * _lerp(0.20, 0.25),
+      w * _lerp(0.30, 0.25),
       h * _lerp(0.95, 1.00),
     );
     final p2 = Offset(
       w * _lerp(0.40, 0.45),
-      h * _lerp(1.00, 0.55),
+      h * _lerp(0.70, 0.55),
     );
     final mid = Offset(
       w * 0.5,
-      h * _lerp(1.00, 0.65),
+      h * _lerp(0.70, 0.65),
     );
 
     final p3 = Offset(
       w * _lerp(0.60, 0.75),
-      h * _lerp(1.00, 0.75),
+      h * _lerp(0.70, 0.75),
     );
     final p4 = Offset(
       w * _lerp(0.80, 0.90),
-      h * _lerp(0.95, 0.65),
+      h * _lerp(0.40, 0.65),
     );
 
-    path.lineTo(0, h * _lerp(0.85, 0.70));
+    path.lineTo(0, h * _lerp(1.00, 0.70));
     path.cubicTo(p1.dx, p1.dy, p2.dx, p2.dy, mid.dx, mid.dy);
-    path.cubicTo(p3.dx, p3.dy, p4.dx, p4.dy, w, h * _lerp(0.85, 0.60));
+    path.cubicTo(p3.dx, p3.dy, p4.dx, p4.dy, w, h * _lerp(0.40, 0.60));
     path.lineTo(w, 0);
     path.close();
     return path;
@@ -565,7 +593,7 @@ class _SignInForm extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 28),
+          const SizedBox(height: 12),
 
           // Title
           const Text(
@@ -635,7 +663,7 @@ class _SignInForm extends StatelessWidget {
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Gunakan akun yang sudah terdaftar di sistem PinjamIN.',
+                    'Gunakan akun yang terdaftar di Kampus Kamu!',
                     style: TextStyle(fontSize: 12, color: AppConst.textSecondary, height: 1.4),
                   ),
                 ),
@@ -669,6 +697,7 @@ class _SignUpForm extends StatelessWidget {
     required this.emailCtrl,
     required this.passCtrl,
     required this.confirmPassCtrl,
+    required this.mfaCtrl,
     required this.passVisible,
     required this.confirmPassVisible,
     required this.loading,
@@ -683,6 +712,7 @@ class _SignUpForm extends StatelessWidget {
   final TextEditingController emailCtrl;
   final TextEditingController passCtrl;
   final TextEditingController confirmPassCtrl;
+  final TextEditingController mfaCtrl;
   final bool passVisible;
   final bool confirmPassVisible;
   final bool loading;
@@ -698,7 +728,7 @@ class _SignUpForm extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
 
           // Title
           const Text(
@@ -768,6 +798,15 @@ class _SignUpForm extends StatelessWidget {
             isPassword: true,
             isVisible: confirmPassVisible,
             onToggleVis: onToggleConfirmPass,
+          ),
+
+          const SizedBox(height: 12),
+
+          // Kode Authenticator (MFA)
+          _AuthTextField(
+            controller: mfaCtrl,
+            hint: 'Kode Verifikasi',
+            prefixIcon: Icons.security_outlined,
           ),
 
           const SizedBox(height: 24),

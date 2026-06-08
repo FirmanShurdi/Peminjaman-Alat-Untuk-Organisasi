@@ -6,6 +6,8 @@ import 'dart:ui' as ui;
 import '../../core/api_service.dart';
 import '../../core/auth_provider.dart';
 import '../../core/constants.dart';
+import '../../partials/admin/navbar.dart';
+import '../../partials/admin/sidebar.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -41,11 +43,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     return Scaffold(
       backgroundColor: AppConst.bg,
-      appBar: AppBar(
-        title: const Text('Dashboard'),
-        centerTitle: true,
+      appBar: const AdminNavbar(
+        title: 'Dashboard',
       ),
-      drawer: _buildDrawer(auth, context),
+      drawer: const AdminSidebar(activeRoute: 'Dashboard'),
       body: RefreshIndicator(
         onRefresh: _fetch,
         child: _loading
@@ -209,58 +210,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  // Sidebar Drawer
-  Widget _buildDrawer(AuthProvider auth, BuildContext context) {
-    return Drawer(
-      backgroundColor: AppConst.bg,
-      child: Column(
-        children: [
-          UserAccountsDrawerHeader(
-            decoration: const BoxDecoration(color: AppConst.primary),
-            accountName: Text(auth.user?['nama'] ?? 'Admin', style: const TextStyle(fontWeight: FontWeight.bold)),
-            accountEmail: Text(auth.user?['email'] ?? 'admin@pinjamin.com'),
-            currentAccountPicture: const CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Icon(Icons.admin_panel_settings, size: 36, color: AppConst.primary),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.dashboard_rounded, color: AppConst.primary),
-            title: const Text('Dashboard', style: TextStyle(fontWeight: FontWeight.w600)),
-            selected: true,
-            selectedTileColor: AppConst.primary.withValues(alpha: 0.1),
-            onTap: () => Navigator.pop(context),
-          ),
-          ListTile(
-            leading: const Icon(Icons.inventory_2_outlined, color: AppConst.textSecondary),
-            title: const Text('Data Barang', style: TextStyle(color: AppConst.textSecondary)),
-            onTap: () => Navigator.pop(context),
-          ),
-          ListTile(
-            leading: const Icon(Icons.swap_horiz_rounded, color: AppConst.textSecondary),
-            title: const Text('Peminjaman', style: TextStyle(color: AppConst.textSecondary)),
-            onTap: () => Navigator.pop(context),
-          ),
-          ListTile(
-            leading: const Icon(Icons.qr_code_scanner_rounded, color: AppConst.textSecondary),
-            title: const Text('Verifikasi QR', style: TextStyle(color: AppConst.textSecondary)),
-            onTap: () => Navigator.pop(context),
-          ),
-          const Spacer(),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout_rounded, color: AppConst.error),
-            title: const Text('Logout', style: TextStyle(color: AppConst.error, fontWeight: FontWeight.w600)),
-            onTap: () async {
-              await auth.logout();
-              if (context.mounted) Navigator.pushReplacementNamed(context, '/login');
-            },
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
 }
 
 // Simple chart painter replicating the web version

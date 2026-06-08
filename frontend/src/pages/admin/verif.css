@@ -17,10 +17,27 @@
     background: #ffffff;
     width: 100%;
     max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
     border-radius: 16px;
     padding: 32px;
     position: relative;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.vm-modal::-webkit-scrollbar {
+    width: 6px;
+}
+.vm-modal::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 8px;
+}
+.vm-modal::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 8px;
+}
+.vm-modal::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
 .vm-close {
@@ -88,6 +105,28 @@
 
 .vm-input:focus {
     border-color: #3b82f6;
+}
+
+.vm-btn-scan-inline {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background 0.2s;
+    border-radius: 8px;
+}
+
+.vm-btn-scan-inline:hover {
+    color: #3b82f6;
+    background: #f1f5f9;
 }
 
 .vm-btn-primary {

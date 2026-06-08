@@ -23,6 +23,8 @@ export default function Beranda() {
   const [currentSection, setCurrentSection] = useState(() => {
     return parseInt(sessionStorage.getItem('beranda_section') || '0', 10);
   });
+  const [qtyModal, setQtyModal] = useState({ show: false, item: null, qty: 1 });
+
 
   useEffect(() => {
     sessionStorage.setItem('beranda_section', currentSection.toString());
@@ -64,7 +66,10 @@ export default function Beranda() {
 
         if (dStat.status === 'success') setStat(dStat.data);
         if (dBarang.status === 'success') {
-          setBarangList(dBarang.data.slice(0, 4));
+          const availableItems = dBarang.data.filter(b => b.stok > 0);
+          const outOfStockItems = dBarang.data.filter(b => b.stok <= 0);
+          setBarangList([...availableItems, ...outOfStockItems].slice(0, 4));
+          
           const uniqueLocs = [...new Set(dBarang.data.map(b => b.lokasi).filter(Boolean))];
           if (uniqueLocs.length > 0) setLokasiList(uniqueLocs);
         }
@@ -191,29 +196,29 @@ export default function Beranda() {
             <div className="hero-grid">
               {/* LEFT */}
               <div className="hero-left">
-                <div className={`badge rv ${revealed[0] ? 'vis' : ''}`}>Platform Manajemen Eksklusif</div>
+                <div className={`badge rv ${revealed[0] ? 'vis' : ''}`}>Layanan Fasilitas Internal</div>
                 <h1 className={`hero-h1 rv ${revealed[0] ? 'vis' : ''}`}>
-                  Infrastruktur<br/>Inventaris<br/><span className="accent">Profesional</span>
+                  Pusat<br/>Peminjaman<br/><span className="accent">Alat PENS</span>
                 </h1>
                 <p className={`hero-p rv ${revealed[0] ? 'vis' : ''}`}>
-                  Kelola dan optimalkan peminjaman alat organisasi Anda dengan sistem cerdas yang aman, cepat, dan transparan.
+                  Fasilitas resmi kampus untuk mempermudah kegiatan Ormawa. Tinggalkan form kertas manual—sekarang pinjam alat gampang, cepat, dan terpusat.
                 </p>
                 <div className={`feats rv ${revealed[0] ? 'vis' : ''}`}>
                   <div className="feat">
                     <div className="feat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
-                    <div><strong>Keamanan Data</strong><span>Verifikasi multi-lapis</span></div>
+                    <div><strong>Data Terintegrasi</strong><span>Gunakan akun SSO</span></div>
                   </div>
                   <div className="feat">
                     <div className="feat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
-                    <div><strong>Akses Instan</strong><span>Persetujuan kilat</span></div>
+                    <div><strong>Approval Cepat</strong><span>Langsung via Admin</span></div>
                   </div>
                   <div className="feat">
                     <div className="feat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
-                    <div><strong>Katalog Sentral</strong><span>100+ alat tersedia</span></div>
+                    <div><strong>Katalog Terpusat</strong><span>Gudang utama kampus</span></div>
                   </div>
                   <div className="feat">
                     <div className="feat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></div>
-                    <div><strong>Sistem Intuitif</strong><span>Booking anti-ribet</span></div>
+                    <div><strong>Sistem Terjadwal</strong><span>Bebas bentrok acara</span></div>
                   </div>
                 </div>
                 <div className={`hero-btns rv ${revealed[0] ? 'vis' : ''}`}>
@@ -222,16 +227,20 @@ export default function Beranda() {
                 </div>
                 <div className={`trust rv ${revealed[0] ? 'vis' : ''}`}>
                   <div className="trust-avatars">
-                    {['A','B','C','D','E'].map((c,i) => <div key={i} className="ta" style={{zIndex:5-i}}>{c}</div>)}
+                    <div className="ta" style={{zIndex:5}}>H</div>
+                    <div className="ta" style={{zIndex:4, background: '#60a5fa'}}>B</div>
+                    <div className="ta" style={{zIndex:3, background: '#34d399'}}>U</div>
+                    <div className="ta" style={{zIndex:2, background: '#f472b6'}}>K</div>
+                    <div className="ta" style={{zIndex:1, background: '#fbbf24'}}>M</div>
                   </div>
-                  <span>Dipercaya <strong>500+</strong> organisasi</span>
+                  <span>Telah memfasilitasi <strong>berbagai Ormawa</strong> PENS</span>
                 </div>
               </div>
 
               {/* RIGHT */}
               <div className={`hero-right rv ${revealed[0] ? 'vis' : ''}`}>
                 <div className="hero-img-wrap">
-                  <img src="/intro/intro.png" alt="Alat Organisasi" className="hero-img" />
+                  <img src={`${API}/intro/intro.png`} alt="Alat Organisasi" className="hero-img" />
                   
                   {/* Floating Badges with elegant design */}
                   <div className="fb fb1">
@@ -275,16 +284,16 @@ export default function Beranda() {
           <div className="card card-steps">
             <div className={`steps-head rv ${revealed[1] ? 'vis' : ''}`}>
               <div className="badge badge-sm">Cara Kerja</div>
-              <h2 className="steps-h2">Pinjam Alat dalam <span className="accent">4 Langkah Mudah</span></h2>
-              <p className="steps-p">Proses sederhana untuk meminjam alat organisasi dari awal hingga selesai.</p>
+              <h2 className="steps-h2">Ajukan Kebutuhanmu <span className="accent">Tanpa Ribet</span></h2>
+              <p className="steps-p">Cukup ikuti 4 langkah mudah ini untuk mengamankan alat keperluan event himpunanmu.</p>
             </div>
 
             <div className="steps-row">
               {[
-                { n: '1', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>, t: 'Pilih Alat', d: 'Jelajahi katalog dan pilih alat yang kamu butuhkan untuk kegiatanmu.' },
-                { n: '2', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>, t: 'Pilih Tanggal', d: 'Tentukan tanggal pinjam dan kembali sesuai kebutuhan kegiatan.' },
-                { n: '3', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>, t: 'Isi Data', d: 'Lengkapi data peminjam dan keperluan peminjaman dengan benar.' },
-                { n: '4', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>, t: 'Konfirmasi & Pinjam', d: 'Konfirmasi peminjaman, ambil alat, dan gunakan dengan bertanggung jawab.' },
+                { n: '1', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>, t: 'Eksplorasi Alat', d: 'Cari dan masukkan alat lab atau perlengkapan ke keranjang.' },
+                { n: '2', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>, t: 'Tentukan Jadwal', d: 'Pilih tanggal ambil dan pengembalian sesuai *rundown* acara.' },
+                { n: '3', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>, t: 'Isi Detail Event', d: 'Berikan deskripsi kegiatan dan kirim permintaan ke Admin.' },
+                { n: '4', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>, t: 'Gas Ambil!', d: 'Tunggu notifikasi di-ACC dan ambil langsung di gudang PENS.' },
               ].map((s, i) => (
                 <React.Fragment key={i}>
                   <div
@@ -296,7 +305,7 @@ export default function Beranda() {
                       <div className="step-num">{s.n}</div>
                       <div className="step-morph-wrap">
                         <span className="step-ic">{s.icon}</span>
-                        <img src={`/intro/step${i + 1}.png`} alt={s.t} className="step-preview-img" />
+                        <img src={`${API}/intro/step${i + 1}.png`} alt={s.t} className="step-preview-img" />
                       </div>
                     </div>
                     <div className="step-text-area">
@@ -313,8 +322,8 @@ export default function Beranda() {
             <div className={`steps-cta rv ${revealed[1] ? 'vis' : ''}`}>
               <div className="cta-inner">
                 <div className="cta-left">
-                  <h4>Butuh Bantuan?</h4>
-                  <p>Tim kami siap membantu proses peminjamanmu.</p>
+                  <h4>Ada Kendala?</h4>
+                  <p>Tim BAAK / Kemahasiswaan siap bantu proses pinjammu.</p>
                 </div>
                 {(() => {
                   if (user && user.role === 'admin') {
@@ -368,15 +377,12 @@ export default function Beranda() {
               {barangList.map((b, i) => (
                 <div key={b.id_barang || i} className="barang-card">
                   <div className="bc-img-wrap">
-                    <img src={b.gambar ? `/barang/${b.gambar}` : '/intro/step1.png'} alt={b.nama_barang} onError={(e) => e.target.src = '/intro/step1.png'} />
+                    <img src={b.gambar ? `${API}/barang/${b.gambar}` : `${API}/intro/step1.png`} alt={b.nama_barang} onError={(e) => e.target.src = `${API}/intro/step1.png`} />
                     <span className="bc-kondisi">{b.kondisi}</span>
                   </div>
                   <div className="bc-body">
                     <div className="bc-kat">
                       <span>{b.nama_kategori || 'Alat Umum'}</span>
-                      <span className="bc-kat-stars">
-                        {[1,2,3,4,5].map(star => <svg key={star} viewBox="0 0 24 24" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>)}
-                      </span>
                       <span className="bc-kat-badge">Premium</span>
                     </div>
                     <h4 className="bc-nama">{b.nama_barang}</h4>
@@ -389,8 +395,27 @@ export default function Beranda() {
                       {b.lokasi || 'Gudang Utama'}
                     </div>
                   </div>
-                  <div className="bc-foot">
-                    <Link to={`/detail/${b.id_barang}`} className="btn-pinjam-sm">Lihat Detail & Pinjam</Link>
+                  <div className="bc-foot" style={{ display: 'flex', flexDirection: 'row', gap: '10px' }}>
+                    <Link to={`/detail/${b.id_barang}`} className="btn-pinjam-sm" style={{ flex: 1 }}>Lihat Detail & Pinjam</Link>
+                    {user && user.role !== 'admin' && (
+                        <button 
+                            className="btn-add-cart-sm"
+                            title="Tambahkan ke Keranjang"
+                            disabled={b.stok <= 0}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                setQtyModal({ show: true, item: b, qty: 1 });
+                            }}
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: '18px', height: '18px' }}>
+                                <circle cx="9" cy="21" r="1"></circle>
+                                <circle cx="20" cy="21" r="1"></circle>
+                                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                <line x1="11" y1="9" x2="17" y2="9"></line>
+                                <line x1="14" y1="6" x2="14" y2="12"></line>
+                            </svg>
+                        </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -421,8 +446,8 @@ export default function Beranda() {
           <div className={`card card-loc rv ${revealed[3] ? 'vis' : ''}`}>
             
             <div className="loc-left">
-              <h2 className="loc-h2">Kunjungi Pusat<br/>Gudang Kami</h2>
-              <p className="loc-p">Pengambilan dan pengembalian barang dilakukan di gudang utama Politeknik Elektronika Negeri Surabaya. Cek estimasi jarak Anda ke lokasi kami.</p>
+              <h2 className="loc-h2">Lokasi Pengambilan<br/>Barang PENS</h2>
+              <p className="loc-p">Gudang utama peralatan terletak di area kampus Politeknik Elektronika Negeri Surabaya. Pastikan kamu mengambil dan mengembalikan barang sesuai jadwal operasional yang berlaku.</p>
               
               <div className="loc-form">
                 <div className="loc-fg">
@@ -482,6 +507,52 @@ export default function Beranda() {
 
         <footer className="ft"><p>© {new Date().getFullYear()} PinjamIN — Sistem Peminjaman Alat Organisasi Kampus</p></footer>
       </section>
+
+      {/* Modal Kuantitas Keranjang */}
+      {qtyModal.show && qtyModal.item && (
+          <div className="qty-modal-overlay" onClick={() => setQtyModal({ show: false, item: null, qty: 1 })}>
+              <div className="qty-modal-box" onClick={e => e.stopPropagation()}>
+                  <div className="qty-modal-header">
+                      <h3>Masukkan ke Keranjang</h3>
+                      <button onClick={() => setQtyModal({ show: false, item: null, qty: 1 })}>&times;</button>
+                  </div>
+                  <div className="qty-modal-body">
+                      <p>Berapa banyak <strong>{qtyModal.item.nama_barang}</strong> yang ingin dipinjam?</p>
+                      <div className="qty-counter">
+                          <button onClick={() => setQtyModal(p => ({ ...p, qty: Math.max(1, p.qty - 1) }))}>-</button>
+                          <span>{qtyModal.qty}</span>
+                          <button onClick={() => setQtyModal(p => ({ ...p, qty: Math.min(qtyModal.item.stok, p.qty + 1) }))}>+</button>
+                      </div>
+                      <span className="qty-stok">Sisa Stok: {qtyModal.item.stok}</span>
+                  </div>
+                  <div className="qty-modal-footer">
+                      <button 
+                          className="btn-tambah-keranjang"
+                          onClick={() => {
+                              const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+                              const existing = cart.find(x => x.id_barang === qtyModal.item.id_barang);
+                              if(existing) {
+                                  if(existing.jumlah + qtyModal.qty > qtyModal.item.stok) {
+                                      addToast('error', `Stok tidak cukup. Stock untuk barang ini sudah ada ${existing.jumlah} di keranjang.`);
+                                      return;
+                                  }
+                                  existing.jumlah += qtyModal.qty;
+                              } else {
+                                  const imgPath = qtyModal.item.gambar ? (qtyModal.item.gambar.startsWith('http') ? qtyModal.item.gambar : `${API}/barang/${qtyModal.item.gambar}`) : null;
+                                  cart.push({ id_barang: qtyModal.item.id_barang, nama_barang: qtyModal.item.nama_barang, gambar: imgPath, jumlah: qtyModal.qty, stok: qtyModal.item.stok });
+                              }
+                              localStorage.setItem('cart', JSON.stringify(cart));
+                              window.dispatchEvent(new Event('cartUpdated'));
+                              addToast('success', `${qtyModal.qty} ${qtyModal.item.nama_barang} masuk keranjang!`);
+                              setQtyModal({ show: false, item: null, qty: 1 });
+                          }}
+                      >
+                          Tambah ke Keranjang
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 }

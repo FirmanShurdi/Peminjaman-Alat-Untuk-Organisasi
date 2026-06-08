@@ -32,7 +32,9 @@ export default function Navbar({ user, currentSection, goTo, onFlash }) {
     <nav className="nav">
       <div className="nav-in">
         <div className="nav-logo" onClick={() => handleNavClick(0, '')}>
-          <div className="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+          <div className="logo-mark">
+            <img src="http://localhost:3000/intro/logo.png" alt="PinjamIN Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+          </div>
           <span>PinjamIN</span>
         </div>
         <div className="nav-links">
@@ -46,10 +48,13 @@ export default function Navbar({ user, currentSection, goTo, onFlash }) {
         <div className="nav-end">
           {user ? (
           <>
-              <div className="nav-avatar">{user.nama?.charAt(0).toUpperCase()}</div>
-              <span className="nav-uname">{user.nama}</span>
-              {user.role === 'admin' && <Link to="/dashboard" className="nav-dash">Dashboard</Link>}
               <NotifDropdown />
+              <div className="nav-divider"></div>
+              <div className="nav-user-info">
+                  <div className="nav-avatar">{user.nama?.charAt(0).toUpperCase()}</div>
+                  <span className="nav-uname">{user.nama}</span>
+              </div>
+              {user.role === 'admin' && <Link to="/dashboard" className="nav-dash">Dashboard</Link>}
               <button onClick={handleLogout} className="btn-logout">Keluar</button>
             </>
           ) : (

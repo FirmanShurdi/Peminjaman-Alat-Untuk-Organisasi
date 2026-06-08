@@ -15,11 +15,13 @@ const STATUS_COLORS = {
     terlambat:  { bg: '#fff1f2', text: '#be123c', border: '#fecdd3' },
     ditolak:    { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
     selesai:    { bg: '#f0fdf4', text: '#166534', border: '#86efac' },
+    selesai_terlambat: { bg: '#fee2e2', text: '#b91c1c', border: '#fecaca' },
     dibatalkan: { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' },
 };
 
 function StatusBadge({ status }) {
     const c = STATUS_COLORS[status] || STATUS_COLORS.menunggu;
+    const label = status === 'selesai_terlambat' ? 'selesai (terlambat)' : status;
     return (
         <span style={{
             display: 'inline-block',
@@ -31,7 +33,7 @@ function StatusBadge({ status }) {
             color: c.text,
             border: `1px solid ${c.border}`,
             textTransform: 'capitalize',
-        }}>{status}</span>
+        }}>{label}</span>
     );
 }
 
@@ -84,6 +86,23 @@ export default function Peminjaman() {
         } finally { setLoading(false); }
     };
 
+    const handleDelete = async (id) => {
+        if (!window.confirm('Apakah Anda yakin ingin menghapus data peminjaman ini secara permanen?')) return;
+        
+        try {
+            const res = await authFetch(`${API}/peminjaman/${id}`, { method: 'DELETE' });
+            const json = await res.json();
+            if (json.status === 'success') {
+                addToast('success', json.message);
+                fetchData();
+            } else {
+                addToast('error', json.message || 'Gagal menghapus data.');
+            }
+        } catch (e) {
+            addToast('error', 'Terjadi kesalahan jaringan.');
+        }
+    };
+
     const processed = useMemo(() => {
         return data.filter(p => {
             const q = search.toLowerCase();
@@ -113,14 +132,14 @@ export default function Peminjaman() {
                 <div className="pm-content">
                     {/* Stats bar */}
                     <div className="pm-stats">
-                        {['menunggu','disetujui','diambil','terlambat','selesai'].map(s => (
+                        {['menunggu','disetujui','diambil','terlambat','selesai', 'selesai_terlambat'].map(s => (
                             <div
                                 key={s}
                                 className={`pm-stat-card ${filterStatus === s ? 'active' : ''}`}
                                 onClick={() => { setFilterStatus(filterStatus === s ? '' : s); setCurrentPage(1); }}
                             >
                                 <span className="pm-stat-num">{data.filter(p => p.status === s).length}</span>
-                                <span className="pm-stat-label">{s.charAt(0).toUpperCase() + s.slice(1)}</span>
+                                <span className="pm-stat-label">{s === 'selesai_terlambat' ? 'Selesai (Terlambat)' : s.charAt(0).toUpperCase() + s.slice(1)}</span>
                             </div>
                         ))}
                     </div>
@@ -144,7 +163,7 @@ export default function Peminjaman() {
                             >
                                 <option value="">Semua Status</option>
                                 {Object.keys(STATUS_COLORS).map(s => (
-                                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                                    <option key={s} value={s}>{s === 'selesai_terlambat' ? 'Selesai (Terlambat)' : s.charAt(0).toUpperCase() + s.slice(1)}</option>
                                 ))}
                             </select>
                         </div>
@@ -163,21 +182,34 @@ export default function Peminjaman() {
                                         <th>Tgl Pinjam</th>
                                         <th>Tgl Kembali</th>
                                         <th>Status</th>
+                                        <th>Verifikator</th>
                                         <th>Diajukan</th>
                                         <th>Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {loading ? (
-                                        <tr><td colSpan="11" className="pm-empty">Memuat data...</td></tr>
+                                        <tr><td colSpan="12" className="pm-empty">Memuat data...</td></tr>
                                     ) : currentData.length === 0 ? (
-                                        <tr><td colSpan="11" className="pm-empty">Tidak ada data peminjaman.</td></tr>
+                                        <tr><td colSpan="12" className="pm-empty">Tidak ada data peminjaman.</td></tr>
                                     ) : currentData.map((p, i) => {
                                         const genCode = (id) => ((id * 2654435761) >>> 0).toString(16).substring(0, 6).toUpperCase().padStart(6, '0');
-                                        const randomCode = `PMJ-${genCode(p.id_peminjaman)}`;
+                                        const randomCode = p.no_pesanan ? `PMJ-${p.no_pesanan}` : `PMJ-${genCode(p.id_peminjaman)}`;
+                                        
+                                        // Pengecekan apakah data ini termasuk dalam satu keranjang yang sama
+                                        const isGrouped = p.no_pesanan && currentData.filter(x => x.no_pesanan === p.no_pesanan).length > 1;
+                                        const isFirstInGroup = isGrouped && (i === 0 || currentData[i - 1].no_pesanan !== p.no_pesanan);
+                                        const isLastInGroup = isGrouped && (i === currentData.length - 1 || currentData[i + 1].no_pesanan !== p.no_pesanan);
+                                        
+                                        let trClass = '';
+                                        if (isGrouped) {
+                                            trClass = 'pm-row-grouped';
+                                            if (isFirstInGroup) trClass += ' pm-group-first';
+                                            if (isLastInGroup) trClass += ' pm-group-last';
+                                        }
                                         
                                         return (
-                                        <tr key={p.id_peminjaman}>
+                                        <tr key={p.id_peminjaman} className={trClass}>
                                             <td>{processed.length - ((currentPage - 1) * ITEMS) - i}</td>
                                             <td className="pm-id">ID: {p.id_peminjaman}</td>
                                             <td style={{ fontWeight: 'bold', color: '#475569', letterSpacing: '0.5px' }}>{randomCode}</td>
@@ -187,14 +219,27 @@ export default function Peminjaman() {
                                             <td>{fmtDate(p.tanggal_pinjam)}</td>
                                             <td>{fmtDate(p.tanggal_kembali)}</td>
                                             <td><StatusBadge status={p.status} /></td>
+                                            <td style={{ fontSize: '13px', fontWeight: '500', color: p.nama_verifikator ? '#0f172a' : '#94a3b8' }}>
+                                                {p.nama_verifikator ? `${p.nama_verifikator} ID${p.id_verifikasi}` : '-'}
+                                            </td>
                                             <td>{fmtDate(p.created_at)}</td>
                                             <td>
-                                                <button
-                                                    className="pm-btn-detail"
-                                                    onClick={() => navigate(`/peminjaman/${p.id_peminjaman}`)}
-                                                >
-                                                    Detail
-                                                </button>
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <button
+                                                        className="pm-btn-detail"
+                                                        style={{ background: '#3b82f6', color: '#fff', border: 'none' }}
+                                                        onClick={() => navigate(`/peminjaman/${p.id_peminjaman}`)}
+                                                    >
+                                                        Detail
+                                                    </button>
+                                                    <button
+                                                        className="pm-btn-detail"
+                                                        style={{ background: '#ef4444', color: '#fff', border: 'none' }}
+                                                        onClick={() => handleDelete(p.id_peminjaman)}
+                                                    >
+                                                        Hapus
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                         );

@@ -443,12 +443,34 @@
 .rp-bukti-row {
   display: flex;
   gap: 12px;
-  flex-wrap: wrap;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rp-bukti-row::-webkit-scrollbar {
+  height: 6px;
+}
+.rp-bukti-row::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.rp-scroll-hint {
+  font-size: 11px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: -8px;
+  margin-bottom: 12px;
+  font-style: italic;
 }
 
 .rp-bukti-item {
-  flex: 1;
-  min-width: 120px;
+  flex: 1 0 160px;
 }
 
 .rp-bukti-item p {

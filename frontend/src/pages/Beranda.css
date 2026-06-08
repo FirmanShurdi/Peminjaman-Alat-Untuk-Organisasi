@@ -30,7 +30,7 @@
 .sec-above{opacity:0;transform:translateY(-60px) scale(0.96);pointer-events:none;z-index:1}
 .sec-below{opacity:0;transform:translateY(60px) scale(0.96);pointer-events:none;z-index:1}
 .card{background:rgba(255,255,255,0.88);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.6);border-radius:24px;box-shadow:0 4px 40px rgba(79,140,255,0.06),0 1px 2px rgba(0,0,0,0.02)}
-.card{max-height:calc(100vh - 76px);overflow-y:auto;scrollbar-width:none}
+.card{max-height:calc(100vh - 76px);overflow-y:auto;scrollbar-width:none;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
 .card::-webkit-scrollbar{display:none}
 .badge{display:inline-block;background:rgba(59,130,246,0.08);color:#3b82f6;font-size:12px;font-weight:600;padding:6px 18px;border-radius:50px;margin-bottom:16px}
 .badge-sm{font-size:11px;padding:5px 14px}
@@ -75,7 +75,7 @@
 /* Hero image */
 .hero-right{position:relative}
 .hero-img-wrap{position:relative;display:flex;justify-content:center}
-.hero-img{width:100%;max-width:clamp(380px,36vw,680px);height:auto;filter:drop-shadow(0 20px 40px rgba(59,130,246,0.1));animation:imgFloat 8s cubic-bezier(.45,.05,.55,.95) infinite;position:relative;z-index:2}
+.hero-img{width:100%;max-width:clamp(380px,36vw,680px);height:auto;border-radius:24px;filter:drop-shadow(0 20px 40px rgba(59,130,246,0.1));animation:imgFloat 8s cubic-bezier(.45,.05,.55,.95) infinite;position:relative;z-index:2}
 @keyframes imgFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 .fb{position:absolute;display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.96);border:1px solid rgba(226,232,240,0.8);padding:12px 18px;border-radius:16px;font-size:12px;box-shadow:0 8px 25px rgba(0,0,0,0.06);z-index:5;white-space:nowrap;backdrop-filter:blur(8px)}
 .fb-ic{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -155,6 +155,49 @@
 .btn-pinjam-sm:hover{background:#3b82f6;color:#fff;box-shadow:0 4px 16px rgba(59,130,246,0.2)}
 .catalog-cta{text-align:center}
 
+/* Tombol Add to Cart Kecil di Card */
+.btn-add-cart-sm {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: #eef2ff;
+    color: #3b82f6;
+    border: 1px solid #c7d2fe;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.btn-add-cart-sm:hover:not(:disabled) {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+}
+
+.btn-add-cart-sm:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.btn-add-cart-sm:disabled {
+    background: #f1f5f9;
+    color: #94a3b8;
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+}
+
+:global(.dark) .btn-add-cart-sm {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.2);
+}
+:global(.dark) .btn-add-cart-sm:hover:not(:disabled) {
+    background: #3b82f6;
+    color: white;
+}
 /* ═══ LOKASI (CARD 4) ═══ */
 .sec-location{background:radial-gradient(circle at top left, #1e293b 0%, #f1f5f9 20%, #e2e8f0 100%)}
 .card-loc{display:flex;padding:0;background:#fff;border-radius:40px;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,0.06);min-height:600px;height:70vh;max-height:750px;max-width:1100px;margin:0 auto;align-items:stretch;}

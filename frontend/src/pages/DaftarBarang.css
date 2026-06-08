@@ -1,7 +1,7 @@
 .daftar-barang-page {
     min-height: 100vh;
     background-color: #f8fafc;
-    padding-top: 80px; /* space for navbar */
+    padding-top: 120px; /* space for navbar */
     padding-bottom: 60px;
 }
 
@@ -115,3 +115,137 @@
 @keyframes spin {
     100% { transform: rotate(360deg); }
 }
+
+/* Tombol Add to Cart Kecil di Card */
+.btn-add-cart-sm {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: #eef2ff;
+    color: #3b82f6;
+    border: 1px solid #c7d2fe;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.btn-add-cart-sm:hover:not(:disabled) {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+}
+
+.btn-add-cart-sm:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.btn-add-cart-sm:disabled {
+    background: #f1f5f9;
+    color: #94a3b8;
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+}
+
+:global(.dark) .btn-add-cart-sm {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.2);
+}
+:global(.dark) .btn-add-cart-sm:hover:not(:disabled) {
+    background: #3b82f6;
+    color: white;
+}
+
+/* Modal Kuantitas */
+.qty-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+.qty-modal-box {
+    background: white;
+    width: 90%;
+    max-width: 400px;
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    overflow: hidden;
+    animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+:global(.dark) .qty-modal-box {
+    background: #1e293b;
+    color: #f1f5f9;
+}
+
+.qty-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+:global(.dark) .qty-modal-header { border-color: #334155; }
+
+.qty-modal-header h3 { margin: 0; font-size: 1.15rem; font-weight: 700; }
+.qty-modal-header button { background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; }
+
+.qty-modal-body {
+    padding: 24px;
+    text-align: center;
+}
+
+.qty-counter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin: 20px auto;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    width: fit-content;
+    border-radius: 12px;
+    padding: 10px 15px;
+}
+
+:global(.dark) .qty-counter { background: #0f172a; border-color: #334155; }
+
+.qty-counter button {
+    background: transparent; border: none; font-size: 24px; cursor: pointer; color: #64748b; width: 30px; height: 30px;
+}
+.qty-counter span { font-size: 20px; font-weight: bold; width: 30px; text-align: center; }
+
+.qty-stok { font-size: 0.85rem; color: #ef4444; font-weight: 600; }
+
+.qty-modal-footer {
+    padding: 20px 24px;
+    border-top: 1px solid #e2e8f0;
+}
+:global(.dark) .qty-modal-footer { border-color: #334155; }
+
+.btn-tambah-keranjang {
+    width: 100%;
+    padding: 14px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-tambah-keranjang:hover { background: #1d4ed8; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }

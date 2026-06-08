@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../partials/Navbar';
 import Flash from '../partials/Flash';
 import BookingModal from './form/BookingModal';
+import { authFetch } from '../utils/authFetch';
 import './Detail.css';
 
 const API = 'http://localhost:3000';
@@ -16,6 +17,7 @@ export default function Detail() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [toasts, setToasts] = useState([]);
   const [showBooking, setShowBooking] = useState(false);
+  const [qty, setQty] = useState(1);
 
   // Ambil data user dari localStorage
   const user = JSON.parse(localStorage.getItem('user'));
@@ -23,10 +25,15 @@ export default function Detail() {
   // Flash helpers
   const addToast = (type, message) => {
     const id = Date.now() + Math.random();
-    setToasts(prev => [...prev, { id, type, message }]);
+    setToasts(prev => {
+        if (prev.some(t => t.message === message)) return prev;
+        return [...prev, { id, type, message }];
+    });
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500);
   };
   const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+
+  const [blacklistMsg, setBlacklistMsg] = useState('');
 
   useEffect(() => {
     // Scroll to top when page loads
@@ -41,6 +48,15 @@ export default function Detail() {
         setTimeout(() => addToast(flash.type, flash.message), 200);
       }
     } catch (_) { }
+
+    if (user && user.role !== 'admin') {
+      authFetch(`${API}/api/peminjaman/cek-blacklist`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'blacklisted') setBlacklistMsg(data.message);
+        })
+        .catch(console.error);
+    }
 
     fetch(`${API}/api/barang/${id}`)
       .then(res => res.json())
@@ -155,6 +171,10 @@ export default function Detail() {
   }
 
   const handlePinjam = () => {
+    if (blacklistMsg) {
+      addToast('error', blacklistMsg);
+      return;
+    }
     const userLocal = localStorage.getItem('user');
     if (!userLocal) {
       addToast('error', 'Silakan login terlebih dahulu untuk mengajukan peminjaman.');
@@ -166,6 +186,7 @@ export default function Detail() {
 
   return (
     <div className="detail-page">
+      <Navbar user={user} currentSection={-1} goTo={() => {}} onFlash={addToast} />
       <Flash toasts={toasts} removeToast={removeToast} />
       {showBooking && (
         <BookingModal
@@ -174,13 +195,11 @@ export default function Detail() {
           onClose={() => setShowBooking(false)}
           onSuccess={(msg) => {
             setShowBooking(false);
-            addToast('success', msg);
-            setTimeout(() => navigate('/riwayat-peminjaman'), 1500);
+            localStorage.setItem('_flash', JSON.stringify({ type: 'success', message: msg }));
+            navigate('/riwayat-peminjaman');
           }}
         />
       )}
-      <Navbar user={user} onFlash={addToast} />
-
       <div className="detail-container" style={{ paddingTop: '100px', position: 'relative' }}>
         <button className="detail-back-btn" onClick={() => navigate(-1)} style={{ position: 'absolute', top: '100px', left: 'clamp(20px, 4vw, 40px)', background: 'transparent', border: 'none', color: '#64748b', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px', padding: '0', zIndex: 10 }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
@@ -191,7 +210,7 @@ export default function Detail() {
             <div className="dc-left">
               <div className="dc-img-wrap">
                 {barang.gambar ? (
-                  <img src={barang.gambar.startsWith('http') ? barang.gambar : `/barang/${barang.gambar}`} alt={barang.nama_barang} className="dc-img" />
+                  <img src={barang.gambar.startsWith('http') ? barang.gambar : `${API}/barang/${barang.gambar}`} alt={barang.nama_barang} className="dc-img" />
                 ) : (
                   <div className="dc-no-img">Tidak Ada Foto</div>
                 )}
@@ -226,14 +245,91 @@ export default function Detail() {
                     <p>{barang.deskripsi || 'Belum ada deskripsi yang ditambahkan untuk barang ini.'}</p>
                   </div>
 
-                  <div className="dc-action">
+                  <div className="dc-action" style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                    {user && user.role !== 'admin' && barang.stok > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', height: '56px', padding: '0 10px', gap: '15px' }}>
+                            <button 
+                                onClick={() => setQty(q => Math.max(1, q - 1))}
+                                style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}
+                            >-</button>
+                            <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a', minWidth: '20px', textAlign: 'center' }}>{qty}</span>
+                            <button 
+                                onClick={() => setQty(q => Math.min(barang.stok, q + 1))}
+                                style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}
+                            >+</button>
+                        </div>
+                    )}
                     <button
                       className="btn-pinjam-besar"
                       onClick={handlePinjam}
                       disabled={barang.stok <= 0}
+                      style={{ flex: 1 }}
                     >
                       {barang.stok > 0 ? 'Ajukan Peminjaman' : 'Barang Sedang Kosong'}
                     </button>
+                    {user && user.role !== 'admin' && (
+                        <button 
+                            className="btn-add-cart-lg" 
+                            title="Tambahkan ke Keranjang"
+                            disabled={barang.stok <= 0}
+                            onClick={() => {
+                                const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+                                const existing = cart.find(x => x.id_barang === barang.id_barang);
+                                if(existing) {
+                                    if(existing.jumlah + qty > barang.stok) {
+                                        addToast('error', `Maksimal stok tercapai. Anda sudah memiliki ${existing.jumlah} di keranjang.`);
+                                        return;
+                                    }
+                                    existing.jumlah += qty;
+                                } else {
+                                    const imgPath = barang.gambar ? (barang.gambar.startsWith('http') ? barang.gambar : `${API}/barang/${barang.gambar}`) : null;
+                                    cart.push({ id_barang: barang.id_barang, nama_barang: barang.nama_barang, gambar: imgPath, jumlah: qty, stok: barang.stok });
+                                }
+                                localStorage.setItem('cart', JSON.stringify(cart));
+                                window.dispatchEvent(new Event('cartUpdated'));
+                                addToast('success', `${qty} ${barang.nama_barang} ditambahkan ke keranjang!`);
+                                setQty(1); // reset qty
+                            }}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '56px',
+                                height: '56px',
+                                borderRadius: '12px',
+                                background: barang.stok > 0 ? '#eff6ff' : '#f1f5f9',
+                                color: barang.stok > 0 ? '#2563eb' : '#94a3b8',
+                                border: `1px solid ${barang.stok > 0 ? '#bfdbfe' : '#e2e8f0'}`,
+                                cursor: barang.stok > 0 ? 'pointer' : 'not-allowed',
+                                transition: 'all 0.2s ease',
+                                flexShrink: 0
+                            }}
+                            onMouseOver={(e) => {
+                                if(barang.stok > 0) {
+                                    e.currentTarget.style.background = '#3b82f6';
+                                    e.currentTarget.style.color = 'white';
+                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                    e.currentTarget.style.boxShadow = '0 8px 20px rgba(59,130,246,0.3)';
+                                }
+                            }}
+                            onMouseOut={(e) => {
+                                if(barang.stok > 0) {
+                                    e.currentTarget.style.background = '#eff6ff';
+                                    e.currentTarget.style.color = '#2563eb';
+                                    e.currentTarget.style.transform = 'none';
+                                    e.currentTarget.style.boxShadow = 'none';
+                                }
+                            }}
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '24px', height: '24px' }}>
+                                <circle cx="9" cy="21" r="1"></circle>
+                                <circle cx="20" cy="21" r="1"></circle>
+                                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                <line x1="11" y1="9" x2="17" y2="9"></line>
+                                <line x1="14" y1="6" x2="14" y2="12"></line>
+                            </svg>
+                        </button>
+                    )}
                   </div>
                 </div>
 
